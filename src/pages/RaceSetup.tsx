@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   db,
   uid,
@@ -12,6 +12,7 @@ import { Screen, useToast } from "../ui";
 
 export default function RaceSetup() {
   const { raceId = "" } = useParams();
+  const navigate = useNavigate();
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const distances = useLiveQuery(
     () => db.distances.where({ raceId }).sortBy("order"),
@@ -246,6 +247,14 @@ export default function RaceSetup() {
 
       <button className="primary" style={{ width: "100%" }} onClick={addDistance}>
         + Legg til distanse
+      </button>
+
+      <button
+        className="ghost"
+        style={{ width: "100%", marginTop: 12 }}
+        onClick={() => navigate(`/race/${raceId}`)}
+      >
+        ← Tilbake til løpet
       </button>
     </Screen>
   );

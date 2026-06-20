@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { db, uid, type Participant } from "../db";
 import { clockInputValue, parseTimeOfDay } from "../time";
 import { Screen, useToast } from "../ui";
@@ -16,6 +16,7 @@ export default function Participants() {
     () => db.participants.where({ raceId }).toArray(),
     [raceId],
   );
+  const navigate = useNavigate();
   const toast = useToast();
   const [filter, setFilter] = useState<string>("all");
 
@@ -148,6 +149,14 @@ export default function Participants() {
         onClick={addParticipant}
       >
         + Legg til deltaker
+      </button>
+
+      <button
+        className="ghost"
+        style={{ width: "100%", marginTop: 12 }}
+        onClick={() => navigate(`/race/${raceId}`)}
+      >
+        ← Tilbake til løpet
       </button>
     </Screen>
   );
