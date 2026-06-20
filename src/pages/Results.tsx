@@ -7,7 +7,7 @@ import {
   sortResults,
   type ParticipantResult,
 } from "../results";
-import { formatClock, formatDuration } from "../time";
+import { formatClock, formatDuration, formatPace } from "../time";
 import {
   downloadJson,
   downloadText,
@@ -196,15 +196,29 @@ export default function Results() {
                       );
                       return (
                         <td key={sp.id} className="num mono">
-                          {s?.elapsedMs != null
-                            ? formatDuration(s.elapsedMs)
-                            : "–"}
+                          {s?.elapsedMs != null ? (
+                            <>
+                              {formatDuration(s.elapsedMs)}
+                              {s.paceSecPerKm != null && (
+                                <div className="tiny muted">
+                                  {formatPace(s.paceSecPerKm * 1000, 1000)}
+                                </div>
+                              )}
+                            </>
+                          ) : "–"}
                         </td>
                       );
                     })}
                     <td className="num mono">
                       {r.finishElapsedMs != null ? (
-                        formatDuration(r.finishElapsedMs)
+                        <>
+                          {formatDuration(r.finishElapsedMs)}
+                          {r.finishPaceSecPerKm != null && (
+                            <div className="tiny muted">
+                              {formatPace(r.finishPaceSecPerKm * 1000, 1000)}
+                            </div>
+                          )}
+                        </>
                       ) : r.status === "started" ? (
                         <span className="muted">startet</span>
                       ) : r.finishAt != null ? (

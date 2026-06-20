@@ -194,19 +194,39 @@ export default function RaceSetup() {
               <div className="tiny muted">Ingen mellomtider.</div>
             )}
             {splits.map((tp) => (
-              <div className="row" key={tp.id} style={{ marginBottom: 6 }}>
-                <input
-                  className="grow"
-                  value={tp.name}
-                  onChange={(e) => updateTP(tp.id, { name: e.target.value })}
-                />
-                <button
-                  className="ghost small"
-                  onClick={() => deleteTP(tp.id)}
-                  aria-label="Slett mellomtid"
-                >
-                  ✕
-                </button>
+              <div key={tp.id} style={{ marginBottom: 8 }}>
+                <div className="row" style={{ gap: 6 }}>
+                  <input
+                    className="grow"
+                    value={tp.name}
+                    onChange={(e) => updateTP(tp.id, { name: e.target.value })}
+                    placeholder="Navn"
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    style={{ width: 100 }}
+                    value={tp.distanceMeters ?? ""}
+                    placeholder="m fra start"
+                    onChange={(e) =>
+                      updateTP(tp.id, {
+                        distanceMeters: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                  />
+                  <button
+                    className="ghost small"
+                    onClick={() => deleteTP(tp.id)}
+                    aria-label="Slett mellomtid"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="tiny muted" style={{ marginTop: 2 }}>
+                  Meter fra start brukes til pace og ETA-estimering.
+                </div>
               </div>
             ))}
             <div className="row spread" style={{ marginTop: 10 }}>

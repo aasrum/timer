@@ -52,6 +52,15 @@ export function parseTimeOfDay(input: string, baseDate: string): number | null {
   return dt.getTime();
 }
 
+/** Pace som mm:ss/km fra varighet og distanse i meter. */
+export function formatPace(elapsedMs: number, distanceM: number): string {
+  if (distanceM <= 0) return "–";
+  const secPerKm = elapsedMs / distanceM; // ms/m = sec/km
+  const minutes = Math.floor(secPerKm / 60);
+  const seconds = Math.floor(secPerKm % 60);
+  return `${minutes}:${pad(seconds)}/km`;
+}
+
 /** ISO-dato (yyyy-mm-dd) for i dag, i lokal tid. */
 export function todayISO(): string {
   const d = new Date();

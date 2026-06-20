@@ -32,10 +32,17 @@ export function latestRegistration(
   return best;
 }
 
+function tpDistanceM(tp: TimingPoint, distance: Distance | undefined): number | undefined {
+  if (tp.kind === "finish") return distance?.lengthMeters;
+  return tp.distanceMeters;
+}
+
 export interface SplitResult {
   timingPoint: TimingPoint;
   passedAt?: number;
   elapsedMs?: number;
+  distanceM?: number;
+  paceSecPerKm?: number;
 }
 
 export interface ParticipantResult {
@@ -44,6 +51,8 @@ export interface ParticipantResult {
   startTime?: number;
   finishAt?: number;
   finishElapsedMs?: number;
+  finishDistanceM?: number;
+  finishPaceSecPerKm?: number;
   splits: SplitResult[];
   status: "finished" | "started" | "no-start";
 }
@@ -66,11 +75,25 @@ export function computeResult(
     const passedAt = reg?.timestamp;
     const elapsedMs =
       passedAt != null && start != null ? passedAt - start : undefined;
-    if (tp.kind === "finish") finishAt = passedAt;
-    else splits.push({ timingPoint: tp, passedAt, elapsedMs });
+    const distanceM = tpDistanceM(tp, distance);
+    const paceSecPerKm =
+      elapsedMs != null && distanceM != null && distanceM > 0
+        ? elapsedMs / distanceM
+        : undefined;
+    if (tp.kind === "finish") {
+      finishAt = passedAt;
+    } else {
+      splits.push({ timingPoint: tp, passedAt, elapsedMs, distanceM, paceSecPerKm });
+    }
   }
+
   const finishElapsedMs =
     finishAt != null && start != null ? finishAt - start : undefined;
+  const finishDistanceM = distance?.lengthMeters;
+  const finishPaceSecPerKm =
+    finishElapsedMs != null && finishDistanceM != null && finishDistanceM > 0
+      ? finishElapsedMs / finishDistanceM
+      : undefined;
 
   const status: ParticipantResult["status"] =
     finishAt != null ? "finished" : start != null ? "started" : "no-start";
@@ -81,6 +104,8 @@ export function computeResult(
     startTime: start,
     finishAt,
     finishElapsedMs,
+    finishDistanceM,
+    finishPaceSecPerKm,
     splits,
     status,
   };
@@ -96,6 +121,99 @@ export function sortResults(results: ParticipantResult[]): ParticipantResult[] {
     if (bf != null) return 1;
     return numericBib(a.participant.bib) - numericBib(b.participant.bib);
   });
+}
+
+export interface ExpectedRunner {
+  participant: Participant;
+  eta: number | undefined;
+  paceSecPerKm: number | undefined;
+}
+
+/**
+ * Beregner forventede løpere ved et gitt tidspunkt basert på passert pace.
+ * Returnerer deltakere som ennå ikke er registrert ved tidspunktet, sortert
+ * etter ETA (de uten ETA sist, sortert på startnr).
+ */
+export function computeExpectedAt(
+  targetTP: TimingPoint,
+  participants: Participant[],
+  distanceMap: Map<string, Distance>,
+  allTimingPoints: TimingPoint[],
+  registrations: Registration[],
+): ExpectedRunner[] {
+  // Bygg oppslagskart (bib:tpId → beste registrering) for effektiv lookup.
+  const regMap = new Map<string, Registration>();
+  for (const r of registrations) {
+    if (r.deleted) continue;
+    const key = `${r.bib}:${r.timingPointId}`;
+    const existing = regMap.get(key);
+    if (!existing || r.timestamp > existing.timestamp) regMap.set(key, r);
+  }
+  const getLatest = (bib: string, tpId: string) =>
+    regMap.get(`${bib}:${tpId}`);
+
+  const result: ExpectedRunner[] = [];
+
+  for (const participant of participants) {
+    if (participant.distanceId !== targetTP.distanceId) continue;
+    if (getLatest(participant.bib, targetTP.id)) continue;
+
+    const distance = distanceMap.get(participant.distanceId);
+    const startTime = startTimeFor(participant, distance);
+
+    const points = allTimingPoints
+      .filter((tp) => tp.distanceId === participant.distanceId)
+      .sort((a, b) => a.order - b.order);
+
+    const targetIdx = points.findIndex((tp) => tp.id === targetTP.id);
+    if (targetIdx < 0) continue;
+
+    const priorPoints = points.slice(0, targetIdx);
+
+    let lastTimestamp: number | undefined;
+    let lastDistanceM: number | undefined;
+
+    for (const tp of [...priorPoints].reverse()) {
+      const reg = getLatest(participant.bib, tp.id);
+      if (reg) {
+        lastTimestamp = reg.timestamp;
+        lastDistanceM = tpDistanceM(tp, distance);
+        break;
+      }
+    }
+
+    const targetDistanceM = tpDistanceM(targetTP, distance);
+
+    let eta: number | undefined;
+    let paceSecPerKm: number | undefined;
+
+    if (
+      lastTimestamp != null &&
+      startTime != null &&
+      lastDistanceM != null &&
+      lastDistanceM > 0 &&
+      targetDistanceM != null &&
+      targetDistanceM > lastDistanceM
+    ) {
+      const elapsed = lastTimestamp - startTime;
+      if (elapsed > 0) {
+        const paceMsPerM = elapsed / lastDistanceM;
+        eta = lastTimestamp + paceMsPerM * (targetDistanceM - lastDistanceM);
+        paceSecPerKm = elapsed / lastDistanceM;
+      }
+    }
+
+    result.push({ participant, eta, paceSecPerKm });
+  }
+
+  result.sort((a, b) => {
+    if (a.eta != null && b.eta != null) return a.eta - b.eta;
+    if (a.eta != null) return -1;
+    if (b.eta != null) return 1;
+    return numericBib(a.participant.bib) - numericBib(b.participant.bib);
+  });
+
+  return result;
 }
 
 function numericBib(bib: string): number {

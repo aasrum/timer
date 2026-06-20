@@ -39,6 +39,8 @@ export interface TimingPoint {
   distanceId: string;
   name: string;
   kind: TimingPointKind;
+  /** Distanse fra start i meter. Brukes til pace-utregning og ETA-estimering. */
+  distanceMeters?: number;
   order: number;
   updatedAt: number;
 }

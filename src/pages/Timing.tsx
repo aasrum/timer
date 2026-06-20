@@ -10,8 +10,8 @@ import {
   type QueueEntry,
   type Registration,
 } from "../db";
-import { startTimeFor } from "../results";
-import { formatClockTenths, formatDuration } from "../time";
+import { computeExpectedAt, startTimeFor } from "../results";
+import { formatClockTenths, formatDuration, formatPace } from "../time";
 import { Screen, useToast } from "../ui";
 
 export default function Timing() {
@@ -31,6 +31,10 @@ export default function Timing() {
   );
   const selectedSetting = useLiveQuery(
     () => db.settings.get(`tp:${raceId}`),
+    [raceId],
+  );
+  const allRegistrations = useLiveQuery(
+    () => db.registrations.where({ raceId }).toArray(),
     [raceId],
   );
   const toast = useToast();
@@ -95,15 +99,19 @@ export default function Timing() {
     ? pMap.get(bibInput.trim())
     : undefined;
 
+  const expectedRunners = useMemo(() => {
+    if (!tp || !participants || !timingPoints || !allRegistrations || !distances)
+      return [];
+    return computeExpectedAt(tp, participants, dMap, timingPoints, allRegistrations);
+  }, [tp, participants, timingPoints, allRegistrations, dMap, distances]);
+
   if (!race) return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
 
-  async function addToQueue() {
-    const bib = bibInput.trim();
+  async function addToQueue(bib: string) {
     if (!bib || !selectedTP) return;
     const exists = (queue ?? []).some((q) => q.bib === bib);
     if (exists) {
       toast(`#${bib} er allerede i køen`);
-      setBibInput("");
       return;
     }
     const entry: QueueEntry = {
@@ -114,6 +122,12 @@ export default function Timing() {
       addedAt: Date.now(),
     };
     await db.queueEntries.add(entry);
+  }
+
+  async function addBibToQueue() {
+    const bib = bibInput.trim();
+    if (!bib) return;
+    await addToQueue(bib);
     setBibInput("");
     inputRef.current?.focus();
   }
@@ -166,6 +180,7 @@ export default function Timing() {
 
   const sortedQueue = [...(queue ?? [])].sort((a, b) => a.addedAt - b.addedAt);
   const recentVisible = (recent ?? []).filter((r) => !r.deleted).slice(0, 10);
+  const registerLabel = tp?.kind === "split" ? "Registrer" : "MÅL";
 
   return (
     <Screen title="Tidtaking" back={`/race/${raceId}`}>
@@ -203,6 +218,69 @@ export default function Timing() {
 
       {tp && (
         <>
+          {/* Forventede løpere */}
+          {expectedRunners.length > 0 && (
+            <>
+              <h2>Forventede ({expectedRunners.length})</h2>
+              {expectedRunners.map(({ participant, eta, paceSecPerKm }) => {
+                const d = dMap.get(participant.distanceId);
+                const etaStr = eta != null ? formatClockTenths(eta) : null;
+                const etaRelMin =
+                  eta != null ? Math.round((eta - now) / 60000) : null;
+                return (
+                  <div
+                    key={participant.id}
+                    className="list-item"
+                    style={{ gap: 8 }}
+                  >
+                    <div
+                      className="mono"
+                      style={{ minWidth: 48, fontWeight: 700, fontSize: 18 }}
+                    >
+                      {participant.bib}
+                    </div>
+                    <div className="grow">
+                      <div style={{ fontWeight: 600 }}>{participant.name}</div>
+                      <div className="tiny muted">
+                        {[d?.name, participant.club].filter(Boolean).join(" · ")}
+                        {paceSecPerKm != null && (
+                          <span>
+                            {" "}· {formatPace(paceSecPerKm * 1000, 1000)}
+                          </span>
+                        )}
+                      </div>
+                      {etaStr && (
+                        <div className="tiny mono" style={{ color: etaRelMin != null && etaRelMin <= 2 ? "var(--warning)" : "var(--muted)" }}>
+                          ETA {etaStr}
+                          {etaRelMin != null && (
+                            <span>
+                              {" "}({etaRelMin >= 0 ? `om ${etaRelMin} min` : `${Math.abs(etaRelMin)} min siden`})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <button
+                        className="ghost small"
+                        onClick={() => addToQueue(participant.bib)}
+                      >
+                        Kø ↵
+                      </button>
+                      <button
+                        className="ghost small"
+                        style={{ background: "var(--success)", border: "none", color: "var(--text)" }}
+                        onClick={() => recordFinish(participant.bib)}
+                      >
+                        {registerLabel}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
           <div className="card">
             <label>Startnummer (forvarsel)</label>
             <input
@@ -213,7 +291,7 @@ export default function Timing() {
               value={bibInput}
               onChange={(e) => setBibInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") addToQueue();
+                if (e.key === "Enter") addBibToQueue();
               }}
               placeholder="––"
             />
@@ -229,7 +307,7 @@ export default function Timing() {
               </div>
             )}
             <div className="fab-row">
-              <button className="primary" onClick={addToQueue}>
+              <button className="primary" onClick={addBibToQueue}>
                 Legg i kø ↵
               </button>
               <button className="success" onClick={recordNow}>
@@ -237,7 +315,7 @@ export default function Timing() {
               </button>
             </div>
             <div className="tiny muted">
-              Legg i kø når deltakeren nærmer seg. Trykk MÅL når hen passerer.
+              Legg i kø når deltakeren nærmer seg. Trykk {registerLabel} når hen passerer.
             </div>
           </div>
 
@@ -270,7 +348,7 @@ export default function Timing() {
                   className="finish-btn"
                   onClick={() => recordFinish(q.bib, q.id)}
                 >
-                  MÅL
+                  {registerLabel}
                 </button>
               </div>
             );
