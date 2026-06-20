@@ -1,0 +1,10 @@
+timer.ntggeilo.no {
+	root * /srv
+	encode gzip zstd
+	try_files {path} /index.html
+	file_server
+
+	# Service worker og manifest skal alltid revalideres.
+	@sw path /sw.js /registerSW.js /manifest.webmanifest
+	header @sw Cache-Control "no-cache"
+}
