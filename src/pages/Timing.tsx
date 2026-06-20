@@ -183,11 +183,15 @@ export default function Timing() {
   const recentVisible = (recent ?? []).filter((r) => !r.deleted).slice(0, 10);
   const registerLabel = tp?.kind === "split" ? "Registrer" : "MÅL";
 
-  // Bare vis løpere der vi har beregnet ETA fra faktiske mellomtider.
-  // Løpere uten ETA (ingen tidligere passeringer) vises ikke – det
-  // ville gitt en ubrukelig liste på hundrevis av navn.
+  // Forventede løpere er bare nyttig når distansen har mellomtider.
+  // Uten mellomtider finnes ingen tidligere passeringer å beregne ETA fra.
   const EXPECTED_LIMIT = 15;
-  const expectedWithEta = expectedRunners.filter((r) => r.eta != null);
+  const distanceHasSplits = (timingPoints ?? []).some(
+    (t) => t.distanceId === tp?.distanceId && t.kind === "split",
+  );
+  const expectedWithEta = distanceHasSplits
+    ? expectedRunners.filter((r) => r.eta != null)
+    : [];
   const visibleExpected = showAllExpected
     ? expectedWithEta
     : expectedWithEta.slice(0, EXPECTED_LIMIT);
