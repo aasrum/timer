@@ -28,6 +28,9 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          # GitHub Pages serverer appen under /timer/ (repo-navnet).
+          VITE_BASE: /timer/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
