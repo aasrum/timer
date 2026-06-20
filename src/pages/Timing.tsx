@@ -42,6 +42,7 @@ export default function Timing() {
   const [stationId, setStationId] = useState<string>("");
   const [bibInput, setBibInput] = useState("");
   const [now, setNow] = useState(Date.now());
+  const [showAllExpected, setShowAllExpected] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -182,6 +183,16 @@ export default function Timing() {
   const recentVisible = (recent ?? []).filter((r) => !r.deleted).slice(0, 10);
   const registerLabel = tp?.kind === "split" ? "Registrer" : "MÅL";
 
+  // Bare vis løpere der vi har beregnet ETA fra faktiske mellomtider.
+  // Løpere uten ETA (ingen tidligere passeringer) vises ikke – det
+  // ville gitt en ubrukelig liste på hundrevis av navn.
+  const EXPECTED_LIMIT = 15;
+  const expectedWithEta = expectedRunners.filter((r) => r.eta != null);
+  const visibleExpected = showAllExpected
+    ? expectedWithEta
+    : expectedWithEta.slice(0, EXPECTED_LIMIT);
+  const hiddenExpected = expectedWithEta.length - visibleExpected.length;
+
   return (
     <Screen title="Tidtaking" back={`/race/${raceId}`}>
       <div className="card row spread">
@@ -218,15 +229,14 @@ export default function Timing() {
 
       {tp && (
         <>
-          {/* Forventede løpere */}
-          {expectedRunners.length > 0 && (
+          {/* Forventede løpere – kun de med beregnet ETA */}
+          {expectedWithEta.length > 0 && (
             <>
-              <h2>Forventede ({expectedRunners.length})</h2>
-              {expectedRunners.map(({ participant, eta, paceSecPerKm }) => {
+              <h2>Forventede ({expectedWithEta.length})</h2>
+              {visibleExpected.map(({ participant, eta, paceSecPerKm }) => {
                 const d = dMap.get(participant.distanceId);
-                const etaStr = eta != null ? formatClockTenths(eta) : null;
-                const etaRelMin =
-                  eta != null ? Math.round((eta - now) / 60000) : null;
+                const etaStr = formatClockTenths(eta!);
+                const etaRelMin = Math.round((eta! - now) / 60000);
                 return (
                   <div
                     key={participant.id}
@@ -249,16 +259,20 @@ export default function Timing() {
                           </span>
                         )}
                       </div>
-                      {etaStr && (
-                        <div className="tiny mono" style={{ color: etaRelMin != null && etaRelMin <= 2 ? "var(--warning)" : "var(--muted)" }}>
-                          ETA {etaStr}
-                          {etaRelMin != null && (
-                            <span>
-                              {" "}({etaRelMin >= 0 ? `om ${etaRelMin} min` : `${Math.abs(etaRelMin)} min siden`})
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <div
+                        className="tiny mono"
+                        style={{
+                          color:
+                            etaRelMin <= 2
+                              ? "var(--warning)"
+                              : "var(--muted)",
+                        }}
+                      >
+                        ETA {etaStr}{" "}
+                        ({etaRelMin >= 0
+                          ? `om ${etaRelMin} min`
+                          : `${Math.abs(etaRelMin)} min siden`})
+                      </div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       <button
@@ -269,7 +283,11 @@ export default function Timing() {
                       </button>
                       <button
                         className="ghost small"
-                        style={{ background: "var(--success)", border: "none", color: "var(--text)" }}
+                        style={{
+                          background: "var(--success)",
+                          border: "none",
+                          color: "var(--text)",
+                        }}
                         onClick={() => recordFinish(participant.bib)}
                       >
                         {registerLabel}
@@ -278,6 +296,24 @@ export default function Timing() {
                   </div>
                 );
               })}
+              {hiddenExpected > 0 && (
+                <button
+                  className="ghost small"
+                  style={{ width: "100%", marginBottom: 8 }}
+                  onClick={() => setShowAllExpected(true)}
+                >
+                  Vis {hiddenExpected} til ↓
+                </button>
+              )}
+              {showAllExpected && expectedWithEta.length > EXPECTED_LIMIT && (
+                <button
+                  className="ghost small"
+                  style={{ width: "100%", marginBottom: 8 }}
+                  onClick={() => setShowAllExpected(false)}
+                >
+                  Vis færre ↑
+                </button>
+              )}
             </>
           )}
 
