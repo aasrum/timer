@@ -10,7 +10,7 @@ import {
   type QueueEntry,
   type Registration,
 } from "../db";
-import { computeExpectedAt, startTimeFor } from "../results";
+import { computeExpectedAt, computeResult, startTimeFor } from "../results";
 import { formatClockTenths, formatDuration, formatPace } from "../time";
 import { Screen, useToast } from "../ui";
 
@@ -402,6 +402,12 @@ export default function Timing() {
             const p = pMap.get(r.bib);
             const d = p ? dMap.get(p.distanceId) : undefined;
             const start = p ? startTimeFor(p, d) : undefined;
+            const result = p
+              ? computeResult(p, d, timingPoints ?? [], allRegistrations ?? [])
+              : undefined;
+            const passedSplits = result?.splits.filter(
+              (s) => s.passedAt != null,
+            );
             return (
               <div className="list-item" key={r.id}>
                 <div className="bib mono" style={{ minWidth: 56 }}>
@@ -414,6 +420,20 @@ export default function Timing() {
                       ? formatDuration(r.timestamp - start)
                       : formatClockTenths(r.timestamp)}
                   </div>
+                  {passedSplits && passedSplits.length > 0 && (
+                    <div className="tiny muted" style={{ marginTop: 2 }}>
+                      {passedSplits.map((s) => (
+                        <span key={s.timingPoint.id} style={{ marginRight: 8 }}>
+                          {s.timingPoint.name}:{" "}
+                          <span className="mono">
+                            {s.elapsedMs != null
+                              ? formatDuration(s.elapsedMs)
+                              : "–"}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button className="ghost small" onClick={() => undo(r)}>
                   Angre

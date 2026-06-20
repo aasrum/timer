@@ -52,6 +52,9 @@ export interface Participant {
   name: string;
   distanceId: string;
   club?: string;
+  /** Kjønn: "M" (menn) | "K" (kvinner) | "" (ikke oppgitt). */
+  gender?: string;
+  /** Aldersklasse / kategori, f.eks. "M40", "K20-29". */
   category?: string;
   /** Intervallstart: individuell starttid (epoch ms). */
   startTime?: number;

@@ -101,6 +101,7 @@ export default function ImportStartlist() {
         name: (mapping.name ? row[mapping.name] : "").trim() || `#${bib}`,
         distanceId,
         club: mapping.club ? row[mapping.club]?.trim() || undefined : undefined,
+        gender: mapping.gender ? row[mapping.gender]?.trim() || undefined : undefined,
         category: mapping.category
           ? row[mapping.category]?.trim() || undefined
           : undefined,
@@ -121,10 +122,11 @@ export default function ImportStartlist() {
   const fields: { key: keyof ColumnMapping; label: string }[] = [
     { key: "bib", label: "Startnummer *" },
     { key: "name", label: "Navn" },
-    { key: "distance", label: "Distanse/klasse" },
+    { key: "distance", label: "Distanse" },
     { key: "startTime", label: "Starttid (intervall)" },
     { key: "club", label: "Klubb" },
-    { key: "category", label: "Kategori" },
+    { key: "gender", label: "Kjønn (M/K)" },
+    { key: "category", label: "Aldersklasse/kategori" },
   ];
 
   return (

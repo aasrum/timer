@@ -37,43 +37,71 @@ export default function Results() {
     [raceId],
   );
   const toast = useToast();
-  const [filter, setFilter] = useState("all");
+
+  const [distanceFilter, setDistanceFilter] = useState("all");
+  const [genderFilter, setGenderFilter] = useState<"" | "M" | "K">("");
+  const [categoryFilter, setCategoryFilter] = useState("");
 
   const dMap = useMemo(
     () => new Map((distances ?? []).map((d) => [d.id, d])),
     [distances],
   );
 
-  const results = useMemo<ParticipantResult[]>(() => {
+  // Alle resultater for valgt distanse.
+  const allResults = useMemo<ParticipantResult[]>(() => {
     if (!participants || !timingPoints || !registrations) return [];
     return participants
-      .filter((p) => filter === "all" || p.distanceId === filter)
+      .filter((p) => distanceFilter === "all" || p.distanceId === distanceFilter)
       .map((p) =>
         computeResult(p, dMap.get(p.distanceId), timingPoints, registrations),
       );
-  }, [participants, timingPoints, registrations, dMap, filter]);
+  }, [participants, timingPoints, registrations, dMap, distanceFilter]);
 
-  const sorted = sortResults(results);
+  // Unike kategorier på tvers av filtrerte resultater.
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    for (const r of allResults) {
+      if (r.participant.category) cats.add(r.participant.category);
+    }
+    return [...cats].sort();
+  }, [allResults]);
+
+  // Filtrer på kjønn og kategori.
+  const filtered = useMemo(() => {
+    return allResults.filter((r) => {
+      if (genderFilter && r.participant.gender !== genderFilter) return false;
+      if (categoryFilter && r.participant.category !== categoryFilter) return false;
+      return true;
+    });
+  }, [allResults, genderFilter, categoryFilter]);
+
+  const sorted = sortResults(filtered);
 
   const splitPoints = useMemo(() => {
-    if (filter === "all") return [];
+    if (distanceFilter === "all") return [];
     return (timingPoints ?? [])
-      .filter((tp) => tp.distanceId === filter && tp.kind === "split")
+      .filter((tp) => tp.distanceId === distanceFilter && tp.kind === "split")
       .sort((a, b) => a.order - b.order);
-  }, [timingPoints, filter]);
+  }, [timingPoints, distanceFilter]);
 
   if (!race)
     return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
 
   function exportCsv() {
+    const showGender = allResults.some((r) => r.participant.gender);
+    const showCategory = allResults.some((r) => r.participant.category);
     const header = [
       "Plass",
       "Startnr",
       "Navn",
+      ...(showGender ? ["Kjønn"] : []),
+      ...(showCategory ? ["Aldersklasse"] : []),
       "Klubb",
       "Distanse",
       ...splitPoints.map((s) => s.name),
+      ...splitPoints.map((s) => `${s.name} pace`),
       "Tid",
+      "Pace",
     ];
     const lines = [header.join(";")];
     let rank = 0;
@@ -83,18 +111,32 @@ export default function Results() {
         r.status === "finished" ? String(rank) : "",
         r.participant.bib,
         r.participant.name,
+        ...(showGender ? [r.participant.gender ?? ""] : []),
+        ...(showCategory ? [r.participant.category ?? ""] : []),
         r.participant.club ?? "",
         dMap.get(r.participant.distanceId)?.name ?? "",
         ...splitPoints.map((sp) => {
           const s = r.splits.find((x) => x.timingPoint.id === sp.id);
           return s?.elapsedMs != null ? formatDuration(s.elapsedMs) : "";
         }),
+        ...splitPoints.map((sp) => {
+          const s = r.splits.find((x) => x.timingPoint.id === sp.id);
+          return s?.paceSecPerKm != null
+            ? formatPace(s.paceSecPerKm * 1000, 1000)
+            : "";
+        }),
         r.finishElapsedMs != null ? formatDuration(r.finishElapsedMs) : "",
+        r.finishPaceSecPerKm != null
+          ? formatPace(r.finishPaceSecPerKm * 1000, 1000)
+          : "",
       ];
       lines.push(cells.map(csvCell).join(";"));
     }
-    const tag = filter === "all" ? "alle" : dMap.get(filter)?.name ?? "";
-    downloadText(`resultater-${slug(race!.name)}-${slug(tag)}.csv`, lines.join("\n"));
+    const tag = distanceFilter === "all" ? "alle" : dMap.get(distanceFilter)?.name ?? "";
+    downloadText(
+      `resultater-${slug(race!.name)}-${slug(tag)}.csv`,
+      lines.join("\n"),
+    );
   }
 
   async function exportBundle() {
@@ -119,26 +161,55 @@ export default function Results() {
     }
   }
 
+  const showGenderCol = sorted.some((r) => r.participant.gender);
+  const showCategoryCol = sorted.some((r) => r.participant.category);
+
   let rank = 0;
 
   return (
     <Screen title="Resultater" back={`/race/${raceId}`}>
+      {/* Distansefilter */}
       <div className="tabs">
         <button
-          className={filter === "all" ? "active" : ""}
-          onClick={() => setFilter("all")}
+          className={distanceFilter === "all" ? "active" : ""}
+          onClick={() => { setDistanceFilter("all"); setCategoryFilter(""); }}
         >
           Alle
         </button>
         {distances?.map((d) => (
           <button
             key={d.id}
-            className={filter === d.id ? "active" : ""}
-            onClick={() => setFilter(d.id)}
+            className={distanceFilter === d.id ? "active" : ""}
+            onClick={() => { setDistanceFilter(d.id); setCategoryFilter(""); }}
           >
             {d.name}
           </button>
         ))}
+      </div>
+
+      {/* Kjønns- og kategorifiltere */}
+      <div className="row wrap" style={{ gap: 6, margin: "8px 0" }}>
+        {(["", "M", "K"] as const).map((g) => (
+          <button
+            key={g}
+            className={`ghost small${genderFilter === g ? " active" : ""}`}
+            onClick={() => setGenderFilter(g)}
+          >
+            {g === "" ? "Alle kjønn" : g === "M" ? "Menn" : "Kvinner"}
+          </button>
+        ))}
+        {categories.length > 0 && (
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            style={{ fontSize: 14, padding: "6px 10px", height: 36, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            <option value="">Alle klasser</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="fab-row">
@@ -167,6 +238,8 @@ export default function Results() {
                 <th>#</th>
                 <th>Nr</th>
                 <th>Navn</th>
+                {showGenderCol && <th>Kjønn</th>}
+                {showCategoryCol && <th>Klasse</th>}
                 {splitPoints.map((s) => (
                   <th key={s.id} className="num">
                     {s.name}
@@ -190,6 +263,12 @@ export default function Results() {
                         <div className="tiny muted">{r.participant.club}</div>
                       )}
                     </td>
+                    {showGenderCol && (
+                      <td className="mono">{r.participant.gender ?? "–"}</td>
+                    )}
+                    {showCategoryCol && (
+                      <td>{r.participant.category ?? "–"}</td>
+                    )}
                     {splitPoints.map((sp) => {
                       const s = r.splits.find(
                         (x) => x.timingPoint.id === sp.id,

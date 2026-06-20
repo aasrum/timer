@@ -7,6 +7,7 @@ import { Screen, useToast } from "../ui";
 
 export default function Participants() {
   const { raceId = "" } = useParams();
+  const navigate = useNavigate();
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const distances = useLiveQuery(
     () => db.distances.where({ raceId }).sortBy("order"),
@@ -16,7 +17,6 @@ export default function Participants() {
     () => db.participants.where({ raceId }).toArray(),
     [raceId],
   );
-  const navigate = useNavigate();
   const toast = useToast();
   const [filter, setFilter] = useState<string>("all");
 
@@ -102,6 +102,7 @@ export default function Participants() {
                 />
               </div>
             </div>
+
             <div className="row" style={{ gap: 8 }}>
               <div className="field grow">
                 <label>Distanse</label>
@@ -133,8 +134,43 @@ export default function Participants() {
                 </div>
               )}
             </div>
-            <div className="row spread">
-              <span className="tiny muted">{p.club ?? ""}</span>
+
+            <div className="row" style={{ gap: 8 }}>
+              <div className="field" style={{ width: 90 }}>
+                <label>Kjønn</label>
+                <select
+                  value={p.gender ?? ""}
+                  onChange={(e) =>
+                    update(p.id, { gender: e.target.value || undefined })
+                  }
+                >
+                  <option value="">–</option>
+                  <option value="M">M</option>
+                  <option value="K">K</option>
+                </select>
+              </div>
+              <div className="field grow">
+                <label>Aldersklasse</label>
+                <input
+                  value={p.category ?? ""}
+                  placeholder="f.eks. M40"
+                  onChange={(e) =>
+                    update(p.id, { category: e.target.value || undefined })
+                  }
+                />
+              </div>
+              <div className="field grow">
+                <label>Klubb</label>
+                <input
+                  value={p.club ?? ""}
+                  onChange={(e) =>
+                    update(p.id, { club: e.target.value || undefined })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="row" style={{ justifyContent: "flex-end" }}>
               <button className="ghost small" onClick={() => remove(p.id)}>
                 Slett
               </button>

@@ -64,10 +64,11 @@ export function parseCsv(text: string): CsvRow[] {
 const FIELD_ALIASES: Record<string, string[]> = {
   bib: ["startnummer", "startnr", "nummer", "nr", "bib", "number", "no"],
   name: ["navn", "name", "deltaker", "fullname", "fullt navn"],
-  distance: ["distanse", "distance", "klasse", "class", "løp", "lop", "race"],
+  distance: ["distanse", "distance", "løp", "lop", "race"],
   startTime: ["starttid", "start", "starttime", "start time", "starttidspunkt"],
   club: ["klubb", "club", "lag", "team"],
-  category: ["kategori", "category", "kjønn", "kjonn", "gender", "klasse2"],
+  gender: ["kjønn", "kjonn", "gender", "sex", "kj"],
+  category: ["kategori", "category", "klasse", "class", "aldersklasse", "klasse2"],
 };
 
 export interface ColumnMapping {
@@ -76,6 +77,7 @@ export interface ColumnMapping {
   distance?: string;
   startTime?: string;
   club?: string;
+  gender?: string;
   category?: string;
 }
 
