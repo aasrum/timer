@@ -8,7 +8,20 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    volumes:
+      - api_data:/data
 
 volumes:
   caddy_data:
   caddy_config:
+  api_data:

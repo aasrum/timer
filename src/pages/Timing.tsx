@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   db,
   getStationId,
@@ -10,12 +10,17 @@ import {
   type QueueEntry,
   type Registration,
 } from "../db";
+import { useAuth } from "../auth";
+import { useLiveSync } from "../liveSync";
 import { computeExpectedAt, computeResult, startTimeFor } from "../results";
 import { formatClockTenths, formatDuration, formatPace } from "../time";
-import { Screen, useToast } from "../ui";
+import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function Timing() {
   const { raceId = "" } = useParams();
+  const { auth, logout } = useAuth();
+  const navigate = useNavigate();
+  const sync = useLiveSync(raceId);
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const distances = useLiveQuery(
     () => db.distances.where({ raceId }).sortBy("order"),
@@ -39,15 +44,24 @@ export default function Timing() {
   );
   const toast = useToast();
 
-  const [stationId, setStationId] = useState<string>("");
+  // Stasjonens identitet: en innlogget stasjon bruker sin egen, ekte ID
+  // (tildelt av admin); et admin-innlogget device faller tilbake til den
+  // gamle anonyme per-nettleser-IDen, siden admin-kontoen er delt og vi
+  // fortsatt vil kunne skille admin-enheter fra hverandre ved fletting.
+  const [deviceId, setDeviceId] = useState<string>("");
   const [bibInput, setBibInput] = useState("");
   const [now, setNow] = useState(Date.now());
   const [showAllExpected, setShowAllExpected] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getStationId().then(setStationId);
+    getStationId().then(setDeviceId);
   }, []);
+
+  const stationId =
+    auth.kind === "station" ? auth.stationId : `admin-${deviceId.slice(0, 8)}`;
+  const stationLabel =
+    auth.kind === "station" ? auth.name : auth.kind === "admin" ? auth.name : "";
 
   // Levende klokke.
   useEffect(() => {
@@ -57,13 +71,19 @@ export default function Timing() {
 
   const selectedTP = (selectedSetting?.value as string) || "";
 
-  // Velg automatisk et tidspunkt (helst Mål) hvis ingen er valgt.
+  // Velg automatisk et tidspunkt hvis ingen er valgt: foretrekk stasjonens
+  // tildelte standardpunkt (kun forvalg, ikke en sperre – alle tabs er
+  // fortsatt klikkbare), ellers Mål.
   useEffect(() => {
     if (!timingPoints || timingPoints.length === 0) return;
     if (selectedTP && timingPoints.some((tp) => tp.id === selectedTP)) return;
+    const preferred =
+      auth.kind === "station" && auth.defaultTimingPointId
+        ? timingPoints.find((tp) => tp.id === auth.defaultTimingPointId)
+        : undefined;
     const finish = timingPoints.find((tp) => tp.kind === "finish");
-    setSetting(`tp:${raceId}`, (finish ?? timingPoints[0]).id);
-  }, [timingPoints, selectedTP, raceId]);
+    setSetting(`tp:${raceId}`, (preferred ?? finish ?? timingPoints[0]).id);
+  }, [timingPoints, selectedTP, raceId, auth]);
 
   const queue = useLiveQuery(
     () =>
@@ -198,7 +218,11 @@ export default function Timing() {
   const hiddenExpected = expectedWithEta.length - visibleExpected.length;
 
   return (
-    <Screen title="Tidtaking" back={`/race/${raceId}`}>
+    <Screen
+      title="Tidtaking"
+      back={auth.kind === "admin" ? `/race/${raceId}` : undefined}
+      actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
+    >
       <div className="card row spread">
         <div>
           <div className="tiny muted">Klokke</div>
@@ -206,9 +230,26 @@ export default function Timing() {
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="tiny muted">Stasjon</div>
-          <div className="mono tiny">{stationId.slice(0, 6) || "…"}</div>
+          <div className="tiny">{stationLabel || "…"}</div>
         </div>
       </div>
+
+      {auth.kind === "station" && (
+        <div className="row spread" style={{ marginBottom: 8 }}>
+          <span className="tiny muted">
+            Rolle: {auth.role === "finish" ? "Mål" : auth.role === "split" ? "Rundetid" : "Forvarsel"}
+          </span>
+          <button
+            className="ghost small"
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+          >
+            Logg ut
+          </button>
+        </div>
+      )}
 
       <div className="tabs">
         {(timingPoints ?? []).map((t) => {

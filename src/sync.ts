@@ -7,41 +7,48 @@ import {
   type Registration,
 } from "./db";
 
-// Eksport/import for fletting av flere uavhengige stasjoner.
-// Filformat: ett race med alle tilhørende tabeller. Fletting er konfliktfri:
-//  - races/distances/timingPoints/participants: last-write-wins på updatedAt
+// Eksport/import/synk for fletting av flere uavhengige stasjoner.
+// Konfliktfrie flettingsregler, uansett om snapshot kommer fra en fil eller
+// nettverkssynk mot serveren:
+//  - race/distances/timingPoints/participants: siste updatedAt vinner
 //  - registrations: union på id; tombstone (deleted) og nyeste updatedAt vinner
 
-export interface RaceBundle {
-  format: "lopstid";
-  version: 1;
-  exportedAt: number;
-  race: Race;
+export interface RaceSnapshot {
+  race: Race | null;
   distances: Distance[];
   timingPoints: TimingPoint[];
   participants: Participant[];
   registrations: Registration[];
 }
 
-export async function exportRace(raceId: string): Promise<RaceBundle> {
-  const race = await db.races.get(raceId);
-  if (!race) throw new Error("Fant ikke løpet");
-  const [distances, timingPoints, participants, registrations] =
+export interface RaceBundle extends Omit<RaceSnapshot, "race"> {
+  format: "lopstid";
+  version: 1;
+  exportedAt: number;
+  race: Race;
+}
+
+export async function readLocalSnapshot(raceId: string): Promise<RaceSnapshot> {
+  const [race, distances, timingPoints, participants, registrations] =
     await Promise.all([
+      db.races.get(raceId).then((r) => r ?? null),
       db.distances.where({ raceId }).toArray(),
       db.timingPoints.where({ raceId }).toArray(),
       db.participants.where({ raceId }).toArray(),
       db.registrations.where({ raceId }).toArray(),
     ]);
+  return { race, distances, timingPoints, participants, registrations };
+}
+
+export async function exportRace(raceId: string): Promise<RaceBundle> {
+  const snapshot = await readLocalSnapshot(raceId);
+  if (!snapshot.race) throw new Error("Fant ikke løpet");
   return {
     format: "lopstid",
     version: 1,
     exportedAt: Date.now(),
-    race,
-    distances,
-    timingPoints,
-    participants,
-    registrations,
+    ...snapshot,
+    race: snapshot.race,
   };
 }
 
@@ -51,10 +58,11 @@ export interface MergeStats {
   participantsUpserted: number;
 }
 
-export async function importBundle(bundle: RaceBundle): Promise<MergeStats> {
-  if (bundle.format !== "lopstid") {
-    throw new Error("Ukjent filformat");
-  }
+/**
+ * Fletter en snapshot (fra fil-import eller nettverkssynk) inn i lokal DB.
+ * Samme konfliktfrie regler uansett kilde.
+ */
+export async function mergeRaceSnapshot(snapshot: RaceSnapshot): Promise<MergeStats> {
   const stats: MergeStats = {
     registrationsAdded: 0,
     registrationsUpdated: 0,
@@ -69,20 +77,21 @@ export async function importBundle(bundle: RaceBundle): Promise<MergeStats> {
     db.participants,
     db.registrations,
     async () => {
-      // Løp + struktur: last-write-wins.
-      const existingRace = await db.races.get(bundle.race.id);
-      if (!existingRace || bundle.race.updatedAt >= existingRace.updatedAt) {
-        await db.races.put(bundle.race);
+      if (snapshot.race) {
+        const existingRace = await db.races.get(snapshot.race.id);
+        if (!existingRace || snapshot.race.updatedAt >= existingRace.updatedAt) {
+          await db.races.put(snapshot.race);
+        }
       }
-      for (const d of bundle.distances) {
+      for (const d of snapshot.distances) {
         const ex = await db.distances.get(d.id);
         if (!ex || d.updatedAt >= ex.updatedAt) await db.distances.put(d);
       }
-      for (const tp of bundle.timingPoints) {
+      for (const tp of snapshot.timingPoints) {
         const ex = await db.timingPoints.get(tp.id);
         if (!ex || tp.updatedAt >= ex.updatedAt) await db.timingPoints.put(tp);
       }
-      for (const p of bundle.participants) {
+      for (const p of snapshot.participants) {
         const ex = await db.participants.get(p.id);
         if (!ex || p.updatedAt >= ex.updatedAt) {
           await db.participants.put(p);
@@ -90,7 +99,7 @@ export async function importBundle(bundle: RaceBundle): Promise<MergeStats> {
         }
       }
       // Registreringer: union på id, nyeste updatedAt vinner.
-      for (const r of bundle.registrations) {
+      for (const r of snapshot.registrations) {
         const ex = await db.registrations.get(r.id);
         if (!ex) {
           await db.registrations.put(r);
@@ -104,6 +113,13 @@ export async function importBundle(bundle: RaceBundle): Promise<MergeStats> {
   );
 
   return stats;
+}
+
+export async function importBundle(bundle: RaceBundle): Promise<MergeStats> {
+  if (bundle.format !== "lopstid") {
+    throw new Error("Ukjent filformat");
+  }
+  return mergeRaceSnapshot(bundle);
 }
 
 export function downloadJson(filename: string, data: unknown): void {

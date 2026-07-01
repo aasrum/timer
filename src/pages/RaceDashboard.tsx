@@ -1,11 +1,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Link, useParams } from "react-router-dom";
 import { db } from "../db";
-import { Screen, useOnline } from "../ui";
+import { useLiveSync } from "../liveSync";
+import { Screen, SyncBadge, useOnline } from "../ui";
 
 export default function RaceDashboard() {
   const { raceId = "" } = useParams();
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
+  const sync = useLiveSync(raceId);
   const counts = useLiveQuery(async () => {
     const [participants, distances, registrations] = await Promise.all([
       db.participants.where({ raceId }).count(),
@@ -28,9 +30,12 @@ export default function RaceDashboard() {
     <Screen title={race.name} back="/">
       <div className="row spread" style={{ margin: "8px 0" }}>
         <span className="muted tiny">{race.date}</span>
-        <span className={online ? "offline-badge" : "muted tiny"}>
-          {online ? "● Online" : "● Offline"}
-        </span>
+        <div className="row" style={{ gap: 8 }}>
+          <SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />
+          <span className={online ? "offline-badge" : "muted tiny"}>
+            {online ? "● Online" : "● Offline"}
+          </span>
+        </div>
       </div>
 
       <div className="card row spread">
@@ -75,6 +80,10 @@ export default function RaceDashboard() {
       </Link>
       <Link className="list-item" to={`/race/${raceId}/setup`} style={link}>
         <div className="grow">Distanser og mellomtider</div>
+        <span aria-hidden>›</span>
+      </Link>
+      <Link className="list-item" to={`/race/${raceId}/stations`} style={link}>
+        <div className="grow">Stasjoner (innlogging for enheter)</div>
         <span aria-hidden>›</span>
       </Link>
     </Screen>

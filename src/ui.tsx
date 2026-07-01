@@ -60,6 +60,40 @@ export function Screen({
   );
 }
 
+// ── Synk-status-badge ──────────────────────────────────────────────────────
+
+export function SyncBadge({
+  status,
+  lastSyncedAt,
+}: {
+  status: "idle" | "syncing" | "ok" | "error" | "offline";
+  lastSyncedAt: number | null;
+}) {
+  if (status === "idle") return null;
+  const label =
+    status === "syncing"
+      ? "Synker…"
+      : status === "offline"
+        ? "Offline"
+        : status === "error"
+          ? "Synk feilet"
+          : lastSyncedAt
+            ? "Synket"
+            : "";
+  if (!label) return null;
+  const color =
+    status === "ok"
+      ? "var(--success)"
+      : status === "error"
+        ? "var(--danger)"
+        : "var(--muted)";
+  return (
+    <span className="tiny" style={{ color, whiteSpace: "nowrap" }}>
+      {label}
+    </span>
+  );
+}
+
 // ── Online/offline-indikator ──────────────────────────────────────────────────
 
 export function useOnline(): boolean {

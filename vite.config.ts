@@ -9,6 +9,13 @@ const base = process.env.VITE_BASE || "/";
 
 export default defineConfig({
   base,
+  server: {
+    // I lokal utvikling kjører API-serveren separat (server/); i produksjon
+    // ruter Caddy /api/* til den samme tjenesten på samme domene.
+    proxy: {
+      "/api": process.env.VITE_API_PROXY || "http://localhost:8080",
+    },
+  },
   plugins: [
     react(),
     VitePWA({

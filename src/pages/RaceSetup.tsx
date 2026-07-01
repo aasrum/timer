@@ -7,12 +7,14 @@ import {
   type StartType,
   type TimingPoint,
 } from "../db";
+import { useLiveSync } from "../liveSync";
 import { clockInputValue, parseTimeOfDay } from "../time";
-import { Screen, useToast } from "../ui";
+import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function RaceSetup() {
   const { raceId = "" } = useParams();
   const navigate = useNavigate();
+  const sync = useLiveSync(raceId);
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const distances = useLiveQuery(
     () => db.distances.where({ raceId }).sortBy("order"),
@@ -101,7 +103,11 @@ export default function RaceSetup() {
   }
 
   return (
-    <Screen title="Oppsett" back={`/race/${raceId}`}>
+    <Screen
+      title="Oppsett"
+      back={`/race/${raceId}`}
+      actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
+    >
       <div className="card">
         <div className="field">
           <label>Navn på løp</label>

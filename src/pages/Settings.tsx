@@ -1,31 +1,12 @@
-import { useEffect, useState } from "react";
-import { db, getSetting, getStationId, setSetting, uid } from "../db";
-import { Screen, useOnline, useToast } from "../ui";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth";
+import { db } from "../db";
+import { Screen, useOnline } from "../ui";
 
 export default function Settings() {
-  const [stationId, setStationId] = useState("");
-  const [stationName, setStationName] = useState("");
-  const toast = useToast();
   const online = useOnline();
-
-  useEffect(() => {
-    getStationId().then(setStationId);
-    getSetting<string>("stationName", "").then(setStationName);
-  }, []);
-
-  async function saveName(name: string) {
-    setStationName(name);
-    await setSetting("stationName", name);
-  }
-
-  async function regenerate() {
-    if (!confirm("Lag ny stasjons-ID? Brukes for å skille enheter ved fletting."))
-      return;
-    const id = uid();
-    await setSetting("stationId", id);
-    setStationId(id);
-    toast("Ny stasjons-ID");
-  }
+  const { auth, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <Screen title="Innstillinger" back="/">
@@ -37,35 +18,34 @@ export default function Settings() {
           </span>
         </div>
         <div className="tiny muted" style={{ marginTop: 8 }}>
-          Appen fungerer fullt offline. Data ligger lokalt i nettleseren på denne
-          enheten til du eksporterer/fletter.
+          Appen fungerer fullt offline. Data ligger lokalt på denne enheten og
+          synkes automatisk med serveren når det er nett.
         </div>
       </div>
 
-      <h2>Denne stasjonen</h2>
+      <h2>Innlogging</h2>
       <div className="card">
-        <div className="field">
-          <label>Navn på stasjon (f.eks. «Mål» eller «5 km»)</label>
-          <input
-            value={stationName}
-            onChange={(e) => saveName(e.target.value)}
-            placeholder="Mål"
-          />
+        <div className="row spread">
+          <span>Innlogget som</span>
+          <span className="mono">{auth.kind === "admin" ? auth.name : "–"}</span>
         </div>
-        <div className="field">
-          <label>Stasjons-ID</label>
-          <input className="mono" value={stationId} readOnly />
-        </div>
-        <button className="ghost small" onClick={regenerate}>
-          Lag ny stasjons-ID
+        <button
+          className="danger"
+          style={{ width: "100%", marginTop: 12 }}
+          onClick={() => {
+            logout();
+            navigate("/login");
+          }}
+        >
+          Logg ut
         </button>
       </div>
 
       <h2>Om</h2>
       <div className="card tiny muted">
-        Løpstid · offline-først tidtaking. Hver enhet registrerer uavhengig;
-        eksporter «.lopstid.json» og flett sammen på resultatsiden for å samle
-        passeringer fra flere stasjoner.
+        Løpstid · offline-først tidtaking. Stasjoner logger inn med en egen
+        kode og registrerer uavhengig av nett; alt synkes automatisk til
+        serveren og videre til alle andre enheter når de er tilkoblet.
       </div>
 
       <button

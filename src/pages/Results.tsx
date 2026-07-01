@@ -15,10 +15,12 @@ import {
   importBundle,
   type RaceBundle,
 } from "../sync";
-import { Screen, useToast } from "../ui";
+import { useLiveSync } from "../liveSync";
+import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function Results() {
   const { raceId = "" } = useParams();
+  const sync = useLiveSync(raceId);
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const distances = useLiveQuery(
     () => db.distances.where({ raceId }).sortBy("order"),
@@ -221,7 +223,11 @@ export default function Results() {
   let rank = 0;
 
   return (
-    <Screen title="Resultater" back={`/race/${raceId}`}>
+    <Screen
+      title="Resultater"
+      back={`/race/${raceId}`}
+      actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
+    >
       {/* Distansefilter */}
       <div className="tabs">
         <button

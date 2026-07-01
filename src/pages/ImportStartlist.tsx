@@ -9,12 +9,14 @@ import {
   type ColumnMapping,
   type CsvRow,
 } from "../csv";
-import { Screen, useToast } from "../ui";
+import { useLiveSync } from "../liveSync";
+import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function ImportStartlist() {
   const { raceId = "" } = useParams();
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const navigate = useNavigate();
+  const sync = useLiveSync(raceId);
   const toast = useToast();
 
   const [text, setText] = useState("");
@@ -140,7 +142,11 @@ export default function ImportStartlist() {
   ];
 
   return (
-    <Screen title="Importer startliste" back={`/race/${raceId}`}>
+    <Screen
+      title="Importer startliste"
+      back={`/race/${raceId}`}
+      actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
+    >
       <div className="card">
         <div className="field">
           <label>Last opp CSV-fil</label>

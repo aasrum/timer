@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db, uid, type Participant } from "../db";
+import { useLiveSync } from "../liveSync";
 import { clockInputValue, parseTimeOfDay } from "../time";
-import { Screen, useToast } from "../ui";
+import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function Participants() {
   const { raceId = "" } = useParams();
   const navigate = useNavigate();
+  const sync = useLiveSync(raceId);
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
   const distances = useLiveQuery(
     () => db.distances.where({ raceId }).sortBy("order"),
@@ -54,7 +56,11 @@ export default function Participants() {
   }
 
   return (
-    <Screen title="Deltakere" back={`/race/${raceId}`}>
+    <Screen
+      title="Deltakere"
+      back={`/race/${raceId}`}
+      actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
+    >
       <div className="tabs">
         <button
           className={filter === "all" ? "active" : ""}
