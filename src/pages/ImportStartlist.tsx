@@ -94,11 +94,19 @@ export default function ImportStartlist() {
       const startTime =
         startRaw && race ? parseTimeOfDay(startRaw, race.date) ?? undefined : undefined;
       const existing = pByBib.get(bib);
+      // Bygg fullt navn: bruk navnekolonne hvis tilgjengelig, ellers kombiner fornavn + etternavn.
+      let name = (mapping.name ? row[mapping.name] : "").trim();
+      if (!name) {
+        const first = (mapping.firstName ? row[mapping.firstName] : "").trim();
+        const last = (mapping.lastName ? row[mapping.lastName] : "").trim();
+        name = [first, last].filter(Boolean).join(" ");
+      }
+
       toPut.push({
         id: existing?.id ?? uid(),
         raceId,
         bib,
-        name: (mapping.name ? row[mapping.name] : "").trim() || `#${bib}`,
+        name: name || `#${bib}`,
         distanceId,
         club: mapping.club ? row[mapping.club]?.trim() || undefined : undefined,
         gender: mapping.gender ? row[mapping.gender]?.trim() || undefined : undefined,
@@ -121,12 +129,14 @@ export default function ImportStartlist() {
 
   const fields: { key: keyof ColumnMapping; label: string }[] = [
     { key: "bib", label: "Startnummer *" },
-    { key: "name", label: "Navn" },
-    { key: "distance", label: "Distanse" },
+    { key: "name", label: "Navn (fullt)" },
+    { key: "firstName", label: "Fornavn (kombineres med Etternavn)" },
+    { key: "lastName", label: "Etternavn" },
+    { key: "distance", label: "Distanse / Øvelse" },
     { key: "startTime", label: "Starttid (intervall)" },
     { key: "club", label: "Klubb" },
     { key: "gender", label: "Kjønn (M/K)" },
-    { key: "category", label: "Aldersklasse/kategori" },
+    { key: "category", label: "Aldersklasse/klasse" },
   ];
 
   return (

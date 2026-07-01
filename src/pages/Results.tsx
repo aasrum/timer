@@ -139,6 +139,60 @@ export default function Results() {
     );
   }
 
+  function exportEQTiming() {
+    // UTF-8 BOM så Excel/EQTiming leser norske tegn riktig.
+    const bom = "﻿";
+    const header = [
+      "Startnummer", "Fornavn", "Etternavn", "Fødselsdato", "Kjønn",
+      "Klubb", "Nasjonalitet", "Øvelse", "Klasse", "Starttid",
+      "Punkt", "Slutttid", "ExitStatus", "Plassering",
+    ];
+    const lines = [bom + header.join(";")];
+
+    let rank = 0;
+    for (const r of sorted) {
+      if (r.status === "finished") rank++;
+      const [fornavn, etternavn] = splitName(r.participant.name);
+      const dist = dMap.get(r.participant.distanceId);
+      const startClock = r.startTime != null ? formatClock(r.startTime) : "";
+      const baseRow = [
+        r.participant.bib,
+        fornavn,
+        etternavn,
+        "",
+        r.participant.gender ?? "",
+        r.participant.club ?? "",
+        "",
+        dist?.name ?? "",
+        r.participant.category ?? "",
+        startClock,
+      ];
+
+      // Én rad per mellomtid
+      for (const s of r.splits) {
+        if (s.passedAt == null) continue;
+        lines.push(
+          [...baseRow, s.timingPoint.name, formatClock(s.passedAt), "OK", ""]
+            .map(csvCell).join(";"),
+        );
+      }
+
+      // Én rad for mål
+      if (r.finishAt != null) {
+        lines.push(
+          [...baseRow, "Mål", formatClock(r.finishAt), "OK",
+            r.status === "finished" ? String(rank) : ""]
+            .map(csvCell).join(";"),
+        );
+      }
+    }
+
+    downloadText(
+      `eqtiming-${slug(race!.name)}.csv`,
+      lines.join("\r\n"),
+    );
+  }
+
   async function exportBundle() {
     const bundle = await exportRace(raceId);
     downloadJson(`${slug(race!.name)}.lopstid.json`, bundle);
@@ -216,8 +270,13 @@ export default function Results() {
         <button className="ghost" onClick={exportCsv}>
           Eksporter CSV
         </button>
-        <button className="ghost" onClick={exportBundle}>
-          Eksporter (flett)
+        <button className="ghost" onClick={exportEQTiming}>
+          EQTiming CSV
+        </button>
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <button className="ghost" style={{ width: "100%" }} onClick={exportBundle}>
+          Eksporter for fletting (.lopstid.json)
         </button>
       </div>
       <div className="card">
@@ -322,6 +381,13 @@ export default function Results() {
 function csvCell(v: string): string {
   if (/[;"\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
   return v;
+}
+
+function splitName(fullName: string): [string, string] {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 1) return [fullName.trim(), ""];
+  const last = parts.pop()!;
+  return [parts.join(" "), last];
 }
 
 function slug(s: string): string {
