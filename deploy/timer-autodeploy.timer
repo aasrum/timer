@@ -1,0 +1,9 @@
+[Unit]
+Description=Sjekk GitHub for ny Løpstid-versjon hvert minutt
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
