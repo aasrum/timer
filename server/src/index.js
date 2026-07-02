@@ -4,6 +4,7 @@ import path from "node:path";
 import { DB_PATH, db } from "./db.js";
 import { ensureBootstrapAdmin } from "./auth.js";
 import { adminRouter } from "./routes/admin.js";
+import { publicRouter } from "./routes/public.js";
 import { stationRouter } from "./routes/station.js";
 import { syncRouter } from "./routes/sync.js";
 
@@ -16,6 +17,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api", adminRouter);
 app.use("/api", stationRouter);
 app.use("/api", syncRouter);
+app.use("/api", publicRouter);
 
 app.use((err, _req, res, _next) => {
   console.error(err);

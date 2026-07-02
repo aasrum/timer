@@ -9,12 +9,17 @@ import {
   type ColumnMapping,
   type CsvRow,
 } from "../csv";
+import { looksLikeEmitXml, parseEmitXml, type EmitRunner } from "../emit";
 import { useLiveSync } from "../liveSync";
 import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function ImportStartlist() {
   const { raceId = "" } = useParams();
   const race = useLiveQuery(() => db.races.get(raceId), [raceId]);
+  const distances = useLiveQuery(
+    () => db.distances.where({ raceId }).sortBy("order"),
+    [raceId],
+  );
   const navigate = useNavigate();
   const sync = useLiveSync(raceId);
   const toast = useToast();
@@ -22,14 +27,16 @@ export default function ImportStartlist() {
   const [text, setText] = useState("");
   const [mapping, setMapping] = useState<ColumnMapping>({});
   const [defaultStart, setDefaultStart] = useState<"mass" | "interval">("mass");
+  const [emitRunners, setEmitRunners] = useState<EmitRunner[] | null>(null);
+  const [emitDistanceId, setEmitDistanceId] = useState("");
 
   const rows = useMemo<CsvRow[]>(() => {
     try {
-      return text.trim() ? parseCsv(text) : [];
+      return text.trim() && !emitRunners ? parseCsv(text) : [];
     } catch {
       return [];
     }
-  }, [text]);
+  }, [text, emitRunners]);
 
   const headers = useMemo(
     () => (rows[0] ? Object.keys(rows[0]) : []),
@@ -38,6 +45,17 @@ export default function ImportStartlist() {
 
   function loadText(value: string) {
     setText(value);
+    // EQ Timing/Emit-startlister er XML; alt annet behandles som CSV.
+    if (looksLikeEmitXml(value)) {
+      try {
+        setEmitRunners(parseEmitXml(value));
+        setEmitDistanceId((prev) => prev || distances?.[0]?.id || "");
+        return;
+      } catch {
+        toast("Kunne ikke lese XML-filen");
+      }
+    }
+    setEmitRunners(null);
     const parsed = value.trim() ? parseCsv(value) : [];
     const hs = parsed[0] ? Object.keys(parsed[0]) : [];
     setMapping(guessMapping(hs));
@@ -47,6 +65,38 @@ export default function ImportStartlist() {
     const file = e.target.files?.[0];
     if (!file) return;
     loadText(await file.text());
+  }
+
+  async function runEmitImport() {
+    if (!race || !emitRunners) return;
+    if (!emitDistanceId) {
+      toast("Velg distanse (opprett en under Oppsett først)");
+      return;
+    }
+    const existing = await db.participants.where({ raceId }).toArray();
+    const pByBib = new Map(existing.map((p) => [p.bib, p]));
+    const toPut: Participant[] = emitRunners.map((r) => {
+      const prev = pByBib.get(r.bib);
+      const startTime = r.startTime
+        ? parseTimeOfDay(r.startTime, race.date) ?? undefined
+        : undefined;
+      return {
+        id: prev?.id ?? uid(),
+        raceId,
+        bib: r.bib,
+        name: r.name,
+        distanceId: emitDistanceId,
+        club: r.club,
+        gender: r.gender,
+        category: r.category,
+        nationality: r.nationality,
+        startTime: startTime ?? prev?.startTime,
+        updatedAt: Date.now(),
+      };
+    });
+    await db.participants.bulkPut(toPut);
+    toast(`Importerte ${toPut.length} deltakere fra EQ Timing`);
+    navigate(`/race/${raceId}/participants`);
   }
 
   async function runImport() {
@@ -149,11 +199,15 @@ export default function ImportStartlist() {
     >
       <div className="card">
         <div className="field">
-          <label>Last opp CSV-fil</label>
-          <input type="file" accept=".csv,text/csv,text/plain" onChange={onFile} />
+          <label>Last opp fil (CSV eller EQ Timing/Emit-XML)</label>
+          <input
+            type="file"
+            accept=".csv,.xml,text/csv,text/plain,text/xml,application/xml"
+            onChange={onFile}
+          />
         </div>
         <div className="field">
-          <label>…eller lim inn CSV her</label>
+          <label>…eller lim inn CSV/XML her</label>
           <textarea
             rows={5}
             placeholder="startnummer;navn;distanse;starttid"
@@ -162,11 +216,73 @@ export default function ImportStartlist() {
           />
         </div>
         <div className="tiny muted">
-          Komma, semikolon eller tab støttes. Første rad må være kolonneoverskrifter.
+          CSV: komma, semikolon eller tab; første rad må være overskrifter.
+          XML-startlister fra EQ Timing gjenkjennes automatisk.
         </div>
       </div>
 
-      {headers.length > 0 && (
+      {emitRunners && (
+        <>
+          <h2>EQ Timing-startliste ({emitRunners.length} deltakere)</h2>
+          <div className="card">
+            <div className="field">
+              <label>Importer til distanse</label>
+              <select
+                value={emitDistanceId}
+                onChange={(e) => setEmitDistanceId(e.target.value)}
+              >
+                <option value="">— velg distanse —</option>
+                {distances?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              {(distances?.length ?? 0) === 0 && (
+                <div className="tiny muted" style={{ marginTop: 4 }}>
+                  Ingen distanser ennå – opprett en under Oppsett først.
+                </div>
+              )}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nr</th>
+                    <th>Navn</th>
+                    <th>Klubb</th>
+                    <th>Klasse</th>
+                    <th>Kjønn</th>
+                    <th>Starttid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {emitRunners.slice(0, 8).map((r) => (
+                    <tr key={r.bib}>
+                      <td className="mono">{r.bib}</td>
+                      <td>{r.name}</td>
+                      <td>{r.club ?? ""}</td>
+                      <td>{r.category ?? ""}</td>
+                      <td>{r.gender ?? ""}</td>
+                      <td className="mono">{r.startTime}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button
+              className="primary"
+              style={{ width: "100%", marginTop: 10 }}
+              onClick={runEmitImport}
+              disabled={!emitDistanceId}
+            >
+              Importer {emitRunners.length} deltakere
+            </button>
+          </div>
+        </>
+      )}
+
+      {!emitRunners && headers.length > 0 && (
         <>
           <h2>Koble kolonner</h2>
           <div className="card">

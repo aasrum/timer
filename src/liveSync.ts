@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { syncRace, type SyncSnapshot } from "./api";
+import { getSetting, setSetting } from "./db";
 import { mergeRaceSnapshot, readLocalSnapshot, type RaceSnapshot } from "./sync";
 import { useAuth } from "./auth";
 
@@ -19,7 +20,16 @@ export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
  */
 export async function syncOnce(raceId: string): Promise<void> {
   const local = await readLocalSnapshot(raceId);
+  const t0 = Date.now();
   const remote = await syncRace(raceId, local as unknown as SyncSnapshot);
+  const t1 = Date.now();
+  // Klokkekorreksjon: estimér avvik mellom denne enheten og serveren ved å
+  // anta at serverens tidsstempel ble tatt midt i rundturen. Lagres som
+  // innstilling og legges på registreringstidspunkter, slik at tider fra
+  // enheter med feilstilt klokke blir sammenlignbare.
+  const offset = Math.round(remote.serverTime - (t0 + t1) / 2);
+  const prev = await getSetting<number>("clockOffsetMs", 0);
+  if (Math.abs(offset - prev) > 250) await setSetting("clockOffsetMs", offset);
   await mergeRaceSnapshot(remote as unknown as RaceSnapshot);
 }
 

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { db } from "../db";
+import { syncOnce } from "../liveSync";
 import { Screen, useOnline } from "../ui";
 
 export default function Settings() {
@@ -53,6 +54,21 @@ export default function Settings() {
         style={{ width: "100%", marginTop: 12 }}
         onClick={async () => {
           if (!confirm("Slette ALLE løp og data på denne enheten?")) return;
+          // Forsøk å synke alt til serveren først, så usynkede
+          // registreringer ikke går tapt med den lokale databasen.
+          if (auth.kind !== "none") {
+            try {
+              const races = await db.races.toArray();
+              for (const r of races) await syncOnce(r.id);
+            } catch {
+              if (
+                !confirm(
+                  "Fikk ikke synket alt til serveren. Usynkede registreringer går tapt. Slette likevel?",
+                )
+              )
+                return;
+            }
+          }
           await db.delete();
           location.reload();
         }}

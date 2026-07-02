@@ -69,6 +69,14 @@ db.exec(`
     data TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_registrations_raceId ON registrations(raceId);
+
+  CREATE TABLE IF NOT EXISTS queue_entries (
+    id TEXT PRIMARY KEY,
+    raceId TEXT NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    data TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_queue_entries_raceId ON queue_entries(raceId);
 `);
 
 /**
@@ -112,6 +120,10 @@ export function mergeAndReadSnapshot(raceId, incoming) {
     for (const tp of incoming.timingPoints ?? []) upsertLWW("timing_points", tp, raceId);
     for (const p of incoming.participants ?? []) upsertLWW("participants", p, raceId);
     for (const r of incoming.registrations ?? []) upsertRegistration(r, raceId);
+    for (const q of incoming.queueEntries ?? []) {
+      // Eldre klienter kan sende kørader uten updatedAt; fall tilbake på addedAt.
+      upsertLWW("queue_entries", { ...q, updatedAt: q.updatedAt ?? q.addedAt }, raceId);
+    }
   });
   tx();
   return readSnapshot(raceId);
@@ -127,5 +139,6 @@ export function readSnapshot(raceId) {
     timingPoints: readAll("timing_points"),
     participants: readAll("participants"),
     registrations: readAll("registrations"),
+    queueEntries: readAll("queue_entries"),
   };
 }

@@ -11,6 +11,7 @@ import Participants from "./pages/Participants";
 import Stations from "./pages/Stations";
 import Timing from "./pages/Timing";
 import Results from "./pages/Results";
+import PublicResults from "./pages/PublicResults";
 import Settings from "./pages/Settings";
 
 // Rot-siden avhenger av hvem som er logget inn: admin ser løpsoversikten,
@@ -52,6 +53,8 @@ export default function App() {
       <ToastProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Offentlig resultatside – bevisst utenfor innloggingsvaktene. */}
+          <Route path="/public/:raceId" element={<PublicResults />} />
           <Route path="/" element={<Root />} />
           <Route
             path="/settings"

@@ -6,6 +6,7 @@ import {
   getStationId,
   setSetting,
   uid,
+  type Distance,
   type Participant,
   type QueueEntry,
   type Registration,
@@ -42,7 +43,12 @@ export default function Timing() {
     () => db.registrations.where({ raceId }).toArray(),
     [raceId],
   );
+  const offsetSetting = useLiveQuery(() => db.settings.get("clockOffsetMs"), []);
   const toast = useToast();
+
+  // Klokkekorreksjon målt av synken: legges på alle tidsstempler slik at
+  // registreringer fra enheter med feilstilt klokke blir sammenlignbare.
+  const clockOffset = (offsetSetting?.value as number) ?? 0;
 
   // Stasjonens identitet: en innlogget stasjon bruker sin egen, ekte ID
   // (tildelt av admin); et admin-innlogget device faller tilbake til den
@@ -130,17 +136,20 @@ export default function Timing() {
 
   async function addToQueue(bib: string) {
     if (!bib || !selectedTP) return;
-    const exists = (queue ?? []).some((q) => q.bib === bib);
+    const exists = (queue ?? []).some((q) => !q.deleted && q.bib === bib);
     if (exists) {
       toast(`#${bib} er allerede i køen`);
       return;
     }
+    const now = Date.now();
     const entry: QueueEntry = {
       id: uid(),
       raceId,
       timingPointId: selectedTP,
       bib,
-      addedAt: Date.now(),
+      addedAt: now,
+      deleted: false,
+      updatedAt: now,
     };
     await db.queueEntries.add(entry);
   }
@@ -153,9 +162,10 @@ export default function Timing() {
     inputRef.current?.focus();
   }
 
-  async function recordFinish(bib: string, queueId?: string) {
+  async function recordFinish(bib: string) {
     if (!selectedTP) return;
-    const ts = Date.now();
+    const wall = Date.now();
+    const ts = wall + clockOffset;
     const reg: Registration = {
       id: uid(),
       raceId,
@@ -168,7 +178,12 @@ export default function Timing() {
       updatedAt: ts,
     };
     await db.registrations.add(reg);
-    if (queueId) await db.queueEntries.delete(queueId);
+    // Tombstone alle køoppføringer for denne bib-en ved dette tidspunktet –
+    // også de som ble lagt inn av en annen (forvarsel-)stasjon.
+    const pending = (queue ?? []).filter((q) => !q.deleted && q.bib === bib);
+    for (const q of pending) {
+      await db.queueEntries.update(q.id, { deleted: true, updatedAt: wall });
+    }
     const p = pMap.get(bib);
     const d = p ? dMap.get(p.distanceId) : undefined;
     const start = p ? startTimeFor(p, d) : undefined;
@@ -188,7 +203,7 @@ export default function Timing() {
   }
 
   async function removeQueue(id: string) {
-    await db.queueEntries.delete(id);
+    await db.queueEntries.update(id, { deleted: true, updatedAt: Date.now() });
   }
 
   async function undo(reg: Registration) {
@@ -199,9 +214,42 @@ export default function Timing() {
     toast(`Angret #${reg.bib}`);
   }
 
-  const sortedQueue = [...(queue ?? [])].sort((a, b) => a.addedAt - b.addedAt);
+  // Rett et feiltastet startnummer UTEN å miste passeringstiden – vanligste
+  // korreksjon på løpsdag. Angre + ny registrering ville gitt nytt tidsstempel.
+  async function editBib(reg: Registration) {
+    const input = prompt(
+      `Rett startnummer (tiden ${formatClockTenths(reg.timestamp)} beholdes):`,
+      reg.bib,
+    );
+    const newBib = input?.trim();
+    if (!newBib || newBib === reg.bib) return;
+    await db.registrations.update(reg.id, { bib: newBib, updatedAt: Date.now() });
+    toast(`#${reg.bib} rettet til #${newBib}`);
+  }
+
+  async function startMass(d: Distance) {
+    if (!confirm(`Starte «${d.name}» NÅ?`)) return;
+    await db.distances.update(d.id, {
+      massStartTime: Date.now() + clockOffset,
+      updatedAt: Date.now(),
+    });
+    toast(`${d.name} startet!`);
+  }
+
+  // Kø: skjul tombstones og bib-er som allerede er registrert ved punktet
+  // (registreringen kan ha skjedd på en annen enhet før tombstonen når frem).
+  const registeredBibs = useMemo(
+    () => new Set((recent ?? []).filter((r) => !r.deleted).map((r) => r.bib)),
+    [recent],
+  );
+  const sortedQueue = (queue ?? [])
+    .filter((q) => !q.deleted && !registeredBibs.has(q.bib))
+    .sort((a, b) => a.addedAt - b.addedAt);
   const recentVisible = (recent ?? []).filter((r) => !r.deleted).slice(0, 10);
   const registerLabel = tp?.kind === "split" ? "Registrer" : "MÅL";
+  const unstartedMass = (distances ?? []).filter(
+    (d) => d.startType === "mass" && d.massStartTime == null,
+  );
 
   // Forventede løpere er bare nyttig når distansen har mellomtider.
   // Uten mellomtider finnes ingen tidligere passeringer å beregne ETA fra.
@@ -225,14 +273,32 @@ export default function Timing() {
     >
       <div className="card row spread">
         <div>
-          <div className="tiny muted">Klokke</div>
-          <div className="big mono">{formatClockTenths(now)}</div>
+          <div className="tiny muted">
+            Klokke{clockOffset !== 0 ? " (korrigert)" : ""}
+          </div>
+          <div className="big mono">{formatClockTenths(now + clockOffset)}</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="tiny muted">Stasjon</div>
           <div className="tiny">{stationLabel || "…"}</div>
         </div>
       </div>
+
+      {unstartedMass.map((d) => (
+        <div className="card row spread" key={d.id}>
+          <div>
+            <div className="tiny muted">Fellesstart – ikke startet</div>
+            <div className="big">{d.name}</div>
+          </div>
+          <button
+            className="success"
+            style={{ minHeight: 64, minWidth: 110, fontSize: 20, fontWeight: 700 }}
+            onClick={() => startMass(d)}
+          >
+            START
+          </button>
+        </div>
+      ))}
 
       {auth.kind === "station" && (
         <div className="row spread" style={{ marginBottom: 8 }}>
@@ -281,7 +347,7 @@ export default function Timing() {
               {visibleExpected.map(({ participant, eta, paceSecPerKm }) => {
                 const d = dMap.get(participant.distanceId);
                 const etaStr = formatClockTenths(eta!);
-                const etaRelMin = Math.round((eta! - now) / 60000);
+                const etaRelMin = Math.round((eta! - (now + clockOffset)) / 60000);
                 return (
                   <div
                     key={participant.id}
@@ -427,7 +493,7 @@ export default function Timing() {
                 </button>
                 <button
                   className="finish-btn"
-                  onClick={() => recordFinish(q.bib, q.id)}
+                  onClick={() => recordFinish(q.bib)}
                 >
                   {registerLabel}
                 </button>
@@ -476,9 +542,14 @@ export default function Timing() {
                     </div>
                   )}
                 </div>
-                <button className="ghost small" onClick={() => undo(r)}>
-                  Angre
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <button className="ghost small" onClick={() => editBib(r)}>
+                    Rett nr
+                  </button>
+                  <button className="ghost small" onClick={() => undo(r)}>
+                    Angre
+                  </button>
+                </div>
               </div>
             );
           })}

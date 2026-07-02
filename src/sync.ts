@@ -4,6 +4,7 @@ import {
   type Distance,
   type TimingPoint,
   type Participant,
+  type QueueEntry,
   type Registration,
 } from "./db";
 
@@ -19,6 +20,8 @@ export interface RaceSnapshot {
   timingPoints: TimingPoint[];
   participants: Participant[];
   registrations: Registration[];
+  /** Valgfri for bakoverkompatibilitet med eldre eksportfiler. */
+  queueEntries?: QueueEntry[];
 }
 
 export interface RaceBundle extends Omit<RaceSnapshot, "race"> {
@@ -29,15 +32,22 @@ export interface RaceBundle extends Omit<RaceSnapshot, "race"> {
 }
 
 export async function readLocalSnapshot(raceId: string): Promise<RaceSnapshot> {
-  const [race, distances, timingPoints, participants, registrations] =
+  const [race, distances, timingPoints, participants, registrations, rawQueue] =
     await Promise.all([
       db.races.get(raceId).then((r) => r ?? null),
       db.distances.where({ raceId }).toArray(),
       db.timingPoints.where({ raceId }).toArray(),
       db.participants.where({ raceId }).toArray(),
       db.registrations.where({ raceId }).toArray(),
+      db.queueEntries.where({ raceId }).toArray(),
     ]);
-  return { race, distances, timingPoints, participants, registrations };
+  // Normaliser gamle kørader fra før synk-feltene fantes.
+  const queueEntries = rawQueue.map((q) => ({
+    ...q,
+    deleted: q.deleted ?? false,
+    updatedAt: q.updatedAt ?? q.addedAt,
+  }));
+  return { race, distances, timingPoints, participants, registrations, queueEntries };
 }
 
 export async function exportRace(raceId: string): Promise<RaceBundle> {
@@ -71,11 +81,14 @@ export async function mergeRaceSnapshot(snapshot: RaceSnapshot): Promise<MergeSt
 
   await db.transaction(
     "rw",
-    db.races,
-    db.distances,
-    db.timingPoints,
-    db.participants,
-    db.registrations,
+    [
+      db.races,
+      db.distances,
+      db.timingPoints,
+      db.participants,
+      db.registrations,
+      db.queueEntries,
+    ],
     async () => {
       if (snapshot.race) {
         const existingRace = await db.races.get(snapshot.race.id);
@@ -108,6 +121,13 @@ export async function mergeRaceSnapshot(snapshot: RaceSnapshot): Promise<MergeSt
           await db.registrations.put(r);
           stats.registrationsUpdated++;
         }
+      }
+      // Forvarsel-kø: samme regel som registreringer.
+      for (const q of snapshot.queueEntries ?? []) {
+        const ex = await db.queueEntries.get(q.id);
+        const qUpdated = q.updatedAt ?? q.addedAt;
+        const exUpdated = ex ? (ex.updatedAt ?? ex.addedAt) : -1;
+        if (!ex || qUpdated > exUpdated) await db.queueEntries.put(q);
       }
     },
   );

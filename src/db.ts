@@ -54,6 +54,8 @@ export interface Participant {
   club?: string;
   /** Kjønn: "M" (menn) | "K" (kvinner) | "" (ikke oppgitt). */
   gender?: string;
+  /** Nasjonskode, f.eks. "NOR". Brukes ved EQ Timing-eksport. */
+  nationality?: string;
   /** Aldersklasse / kategori, f.eks. "M40", "K20-29". */
   category?: string;
   /** Intervallstart: individuell starttid (epoch ms). */
@@ -77,13 +79,20 @@ export interface Registration {
   updatedAt: number;
 }
 
-/** Forvarsel-kø: lokal, flyktig liste over forventede passeringer. */
+/**
+ * Forvarsel-kø: forventede passeringer. Synkes mellom enheter slik at en
+ * forvarsel-stasjon lenger ute i løypa mater køen til målstasjonen.
+ * Tombstone (deleted) + updatedAt gjør at også fjerning propagerer.
+ * Feltene er valgfrie for bakoverkompatibilitet med rader fra før synk.
+ */
 export interface QueueEntry {
   id: string;
   raceId: string;
   timingPointId: string;
   bib: string;
   addedAt: number;
+  deleted?: boolean;
+  updatedAt?: number;
 }
 
 export interface Setting {

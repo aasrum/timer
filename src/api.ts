@@ -102,6 +102,7 @@ export interface SyncSnapshot {
   timingPoints: unknown[];
   participants: unknown[];
   registrations: unknown[];
+  queueEntries?: unknown[];
 }
 
 export function syncRace(
@@ -112,4 +113,11 @@ export function syncRace(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+/** Offentlig resultat-snapshot – krever ingen innlogging. */
+export function fetchPublicSnapshot(
+  raceId: string,
+): Promise<SyncSnapshot & { serverTime: number }> {
+  return request(`/public/${raceId}`);
 }

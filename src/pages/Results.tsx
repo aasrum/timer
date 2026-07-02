@@ -164,7 +164,7 @@ export default function Results() {
         "",
         r.participant.gender ?? "",
         r.participant.club ?? "",
-        "",
+        r.participant.nationality ?? "",
         dist?.name ?? "",
         r.participant.category ?? "",
         startClock,
@@ -198,6 +198,16 @@ export default function Results() {
   async function exportBundle() {
     const bundle = await exportRace(raceId);
     downloadJson(`${slug(race!.name)}.lopstid.json`, bundle);
+  }
+
+  async function copyPublicLink() {
+    const url = `${location.origin}${location.pathname}#/public/${raceId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Offentlig resultatlenke kopiert");
+    } catch {
+      prompt("Kopier lenken manuelt:", url);
+    }
   }
 
   async function onImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -279,10 +289,11 @@ export default function Results() {
         <button className="ghost" onClick={exportEQTiming}>
           EQTiming CSV
         </button>
-      </div>
-      <div style={{ marginBottom: 8 }}>
-        <button className="ghost" style={{ width: "100%" }} onClick={exportBundle}>
-          Eksporter for fletting (.lopstid.json)
+        <button className="ghost" onClick={copyPublicLink}>
+          Del resultatlenke
+        </button>
+        <button className="ghost" onClick={exportBundle}>
+          Eksporter (flett)
         </button>
       </div>
       <div className="card">
@@ -389,6 +400,7 @@ function csvCell(v: string): string {
   return v;
 }
 
+/** «Ola Nordmann Hansen» → ["Ola Nordmann", "Hansen"]. */
 function splitName(fullName: string): [string, string] {
   const parts = fullName.trim().split(/\s+/);
   if (parts.length <= 1) return [fullName.trim(), ""];
