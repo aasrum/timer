@@ -3,11 +3,9 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - caddy_data:/data
-      - caddy_config:/config
+      # Kun localhost: en eksisterende nginx på hosten terminerer TLS for
+      # timer.ntggeilo.no og reverse-proxyer hit. Se README/DEPLOY.
+      - "127.0.0.1:5080:80"
     depends_on:
       - api
 
@@ -22,6 +20,4 @@ services:
       - api_data:/data
 
 volumes:
-  caddy_data:
-  caddy_config:
   api_data:
