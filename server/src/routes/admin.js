@@ -18,6 +18,30 @@ adminRouter.post("/admin/login", rateLimit, (req, res) => {
   res.json({ token, name: admin.username });
 });
 
+// Løpene som finnes på serveren. Klientens løpsliste bor i nettleserens egen
+// IndexedDB, så uten dette ser en admin på en ny (eller tømt) enhet ingen løp
+// selv om de ligger trygt her.
+adminRouter.get("/admin/races", requireAdmin, (_req, res) => {
+  const rows = db
+    .prepare(`SELECT id, data FROM races ORDER BY updatedAt DESC`)
+    .all();
+  res.json(
+    rows.map((r) => {
+      const race = JSON.parse(r.data);
+      const count = (table) =>
+        db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE raceId = ?`).get(r.id).c;
+      return {
+        id: race.id,
+        name: race.name,
+        date: race.date,
+        updatedAt: race.updatedAt,
+        participants: count("participants"),
+        registrations: count("registrations"),
+      };
+    }),
+  );
+});
+
 adminRouter.post("/admin/races/:raceId/stations", requireAdmin, (req, res) => {
   const { raceId } = req.params;
   const { name, role, defaultTimingPointId } = req.body || {};

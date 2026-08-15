@@ -59,6 +59,20 @@ export function stationLogin(pin: string): Promise<StationLoginResult> {
   });
 }
 
+export interface RemoteRaceInfo {
+  id: string;
+  name: string;
+  date: string;
+  updatedAt: number;
+  participants: number;
+  registrations: number;
+}
+
+/** Løp som finnes på serveren – uavhengig av hva denne enheten har lokalt. */
+export function listRemoteRaces(): Promise<RemoteRaceInfo[]> {
+  return request("/admin/races");
+}
+
 export interface StationInfo {
   id: string;
   name: string;
