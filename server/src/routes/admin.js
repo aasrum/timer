@@ -33,12 +33,13 @@ adminRouter.post("/admin/races/:raceId/stations", requireAdmin, (req, res) => {
     role,
     defaultTimingPointId: defaultTimingPointId || null,
     pinHash,
+    pin,
     createdAt: Date.now(),
     lastSeenAt: null,
   };
   db.prepare(
-    `INSERT INTO stations (id, raceId, name, role, defaultTimingPointId, pinHash, createdAt, lastSeenAt)
-     VALUES (@id, @raceId, @name, @role, @defaultTimingPointId, @pinHash, @createdAt, @lastSeenAt)`,
+    `INSERT INTO stations (id, raceId, name, role, defaultTimingPointId, pinHash, pin, createdAt, lastSeenAt)
+     VALUES (@id, @raceId, @name, @role, @defaultTimingPointId, @pinHash, @pin, @createdAt, @lastSeenAt)`,
   ).run(station);
   res.json({
     id: station.id,
@@ -51,10 +52,12 @@ adminRouter.post("/admin/races/:raceId/stations", requireAdmin, (req, res) => {
   });
 });
 
+// Koden sendes med i listen (aldri hashen) slik at arrangøren kan lese den om
+// igjen under løpet. Krever admin-token, som allerede kan lage ny kode uansett.
 adminRouter.get("/admin/races/:raceId/stations", requireAdmin, (req, res) => {
   const rows = db
     .prepare(
-      `SELECT id, name, role, defaultTimingPointId, createdAt, lastSeenAt FROM stations WHERE raceId = ? ORDER BY createdAt`,
+      `SELECT id, name, role, defaultTimingPointId, pin, createdAt, lastSeenAt FROM stations WHERE raceId = ? ORDER BY createdAt`,
     )
     .all(req.params.raceId);
   res.json(rows);
@@ -66,7 +69,11 @@ adminRouter.post("/admin/races/:raceId/stations/:stationId/regenerate-pin", requ
   if (!station) return res.status(404).json({ error: "Fant ikke stasjonen" });
   const pin = generatePin();
   const pinHash = bcrypt.hashSync(pin, 10);
-  db.prepare(`UPDATE stations SET pinHash = ? WHERE id = ?`).run(pinHash, stationId);
+  db.prepare(`UPDATE stations SET pinHash = ?, pin = ? WHERE id = ?`).run(
+    pinHash,
+    pin,
+    stationId,
+  );
   res.json({ pin });
 });
 

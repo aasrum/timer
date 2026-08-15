@@ -79,6 +79,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_entries_raceId ON queue_entries(raceId);
 `);
 
+// Migreringer for databaser opprettet før en kolonne fantes. SQLite har ingen
+// "ADD COLUMN IF NOT EXISTS", så vi ser på tabellinfoen først.
+function addColumnIfMissing(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+// Stasjonskoden lagres i klartekst ved siden av hashen, slik at arrangøren kan
+// slå den opp igjen gjennom hele løpet i stedet for å måtte lage ny kode når
+// en lapp blir borte. pinHash er fortsatt det som verifiseres ved innlogging,
+// så stasjoner opprettet før denne kolonnen fungerer uendret (de viser bare
+// ingen kode, og må få ny kode hvis den trengs igjen).
+addColumnIfMissing("stations", "pin", "TEXT");
+
 /**
  * Fletter innkommende rader for én tabell inn i SQLite med "siste
  * updatedAt vinner"-regelen (samme regel som klientens mergeRaceSnapshot).

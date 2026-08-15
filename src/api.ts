@@ -64,6 +64,8 @@ export interface StationInfo {
   name: string;
   role: string;
   defaultTimingPointId: string | null;
+  /** Null for stasjoner opprettet før koder ble lagret gjenfinnbart. */
+  pin: string | null;
   createdAt: number;
   lastSeenAt: number | null;
 }

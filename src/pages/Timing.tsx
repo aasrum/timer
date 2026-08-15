@@ -340,7 +340,17 @@ export default function Timing() {
 
       {!tp && (
         <div className="empty">
-          Opprett minst én distanse med et måltidspunkt under Oppsett.
+          {auth.kind === "station" ? (
+            <>
+              Venter på oppsettet fra arrangøren…
+              <div className="tiny muted" style={{ marginTop: 6 }}>
+                Distanser og tidspunkter kommer hit automatisk så snart de er
+                lagt inn. Enheten kan stå åpen imens.
+              </div>
+            </>
+          ) : (
+            "Opprett minst én distanse med et måltidspunkt under Oppsett."
+          )}
         </div>
       )}
 

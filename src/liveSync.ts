@@ -84,6 +84,12 @@ export function useLiveSync(raceId: string | undefined): {
       clearInterval(interval);
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
+      // Skyll ut endringer med én gang siden forlates, i stedet for å vente
+      // på neste intervall. Uten dette kan en arrangør sette opp løpet og gå
+      // rett til Stasjoner for å dele ut koder, mens distanser og
+      // mellomtider ennå ikke har nådd serveren – da logger enhetene inn på
+      // et tomt løp. Fire-and-forget: siden er allerede borte.
+      if (navigator.onLine) void syncOnce(raceId).catch(() => {});
     };
   }, [raceId, auth.kind]);
 
