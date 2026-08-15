@@ -132,6 +132,16 @@ export default function Timing() {
     return computeExpectedAt(tp, participants, dMap, timingPoints, allRegistrations);
   }, [tp, participants, timingPoints, allRegistrations, dMap, distances]);
 
+  // Bib-er som allerede er registrert ved dette punktet – brukes til å skjule
+  // køoppføringer der registreringen skjedde på en annen enhet.
+  // NB: må stå over den tidlige returen under, ellers varierer antall hooks
+  // mellom renders og React kaster «Rendered more hooks than during the
+  // previous render».
+  const registeredBibs = useMemo(
+    () => new Set((recent ?? []).filter((r) => !r.deleted).map((r) => r.bib)),
+    [recent],
+  );
+
   if (!race) return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
 
   async function addToQueue(bib: string) {
@@ -238,10 +248,6 @@ export default function Timing() {
 
   // Kø: skjul tombstones og bib-er som allerede er registrert ved punktet
   // (registreringen kan ha skjedd på en annen enhet før tombstonen når frem).
-  const registeredBibs = useMemo(
-    () => new Set((recent ?? []).filter((r) => !r.deleted).map((r) => r.bib)),
-    [recent],
-  );
   const sortedQueue = (queue ?? [])
     .filter((q) => !q.deleted && !registeredBibs.has(q.bib))
     .sort((a, b) => a.addedAt - b.addedAt);
