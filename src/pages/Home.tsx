@@ -10,7 +10,12 @@ import { Screen, useOnline, useToast } from "../ui";
 
 export default function Home() {
   const races = useLiveQuery(
-    () => db.races.orderBy("updatedAt").reverse().toArray(),
+    () =>
+      db.races
+        .orderBy("updatedAt")
+        .reverse()
+        .filter((r) => !r.deleted)
+        .toArray(),
     [],
   );
   const navigate = useNavigate();
@@ -108,7 +113,12 @@ export default function Home() {
           style={{ textDecoration: "none", color: "inherit" }}
         >
           <div className="grow">
-            <div className="big">{r.name}</div>
+            <div className="big">
+              {r.name}
+              {r.status === "finished" && (
+                <span className="tiny muted"> · avsluttet</span>
+              )}
+            </div>
             <div className="muted tiny">{r.date}</div>
           </div>
           <span aria-hidden>›</span>

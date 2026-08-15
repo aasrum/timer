@@ -14,6 +14,18 @@ export interface Race {
   name: string;
   /** ISO-dato (yyyy-mm-dd) som brukes som basis for klokkeslett. */
   date: string;
+  /**
+   * Avsluttet løp låser registrering på alle stasjoner, så en glemt enhet i
+   * en jakkelomme ikke kan legge inn passeringer timer etter målgang.
+   * Udefinert regnes som aktivt (løp fra før feltet fantes).
+   */
+  status?: "active" | "finished";
+  /**
+   * Tombstone. Sletting må propagere som data, ikke som fravær av data:
+   * synken er en union-fletting, så en rad som bare fjernes lokalt kommer
+   * rett tilbake fra serveren eller fra en enhet som var offline.
+   */
+  deleted?: boolean;
   createdAt: number;
   updatedAt: number;
 }

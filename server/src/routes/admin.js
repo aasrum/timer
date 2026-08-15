@@ -25,20 +25,21 @@ adminRouter.get("/admin/races", requireAdmin, (_req, res) => {
   const rows = db
     .prepare(`SELECT id, data FROM races ORDER BY updatedAt DESC`)
     .all();
+  const count = (table, id) =>
+    db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE raceId = ?`).get(id).c;
   res.json(
-    rows.map((r) => {
-      const race = JSON.parse(r.data);
-      const count = (table) =>
-        db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE raceId = ?`).get(r.id).c;
-      return {
+    rows
+      .map((r) => JSON.parse(r.data))
+      .filter((race) => !race.deleted)
+      .map((race) => ({
         id: race.id,
         name: race.name,
         date: race.date,
+        status: race.status ?? "active",
         updatedAt: race.updatedAt,
-        participants: count("participants"),
-        registrations: count("registrations"),
-      };
-    }),
+        participants: count("participants", race.id),
+        registrations: count("registrations", race.id),
+      })),
   );
 });
 

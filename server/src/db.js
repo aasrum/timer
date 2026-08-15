@@ -129,9 +129,37 @@ function upsertRegistration(row, raceId) {
  * offline lenge, eller har feil klokke, mister aldri data fordi ingenting
  * filtreres bort på vei inn eller ut.
  */
+const CHILD_TABLES = [
+  "distances",
+  "timing_points",
+  "participants",
+  "registrations",
+  "queue_entries",
+];
+
+/** Er løpet slettet på serveren? Tombstonen er alltid fasit. */
+function isRaceDeleted(raceId) {
+  const row = db.prepare(`SELECT data FROM races WHERE id = ?`).get(raceId);
+  return row ? JSON.parse(row.data).deleted === true : false;
+}
+
+function purgeRaceChildren(raceId) {
+  for (const t of CHILD_TABLES) {
+    db.prepare(`DELETE FROM ${t} WHERE raceId = ?`).run(raceId);
+  }
+}
+
 export function mergeAndReadSnapshot(raceId, incoming) {
   const tx = db.transaction(() => {
     if (incoming.race) upsertLWW("races", incoming.race, raceId);
+    // Et slettet løp tar ikke imot data. En enhet som var offline da løpet
+    // ble slettet, sender fortsatt sitt fulle datasett; uten denne sperren
+    // ville deltakere og passeringer blitt gjenopplivet på serveren.
+    // Tombstonen blir liggende, så alle enheter får beskjeden om slettingen.
+    if (isRaceDeleted(raceId)) {
+      purgeRaceChildren(raceId);
+      return;
+    }
     for (const d of incoming.distances ?? []) upsertLWW("distances", d, raceId);
     for (const tp of incoming.timingPoints ?? []) upsertLWW("timing_points", tp, raceId);
     for (const p of incoming.participants ?? []) upsertLWW("participants", p, raceId);

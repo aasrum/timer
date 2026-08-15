@@ -95,6 +95,21 @@ export async function mergeRaceSnapshot(snapshot: RaceSnapshot): Promise<MergeSt
         if (!existingRace || snapshot.race.updatedAt >= existingRace.updatedAt) {
           await db.races.put(snapshot.race);
         }
+        // Slettet løp: behold tombstonen (så den fortsetter å propagere), men
+        // kast alle underliggende data. Uten dette ville denne enheten sendt
+        // deltakere og passeringer tilbake opp og gjenopplivet innholdet.
+        const merged = await db.races.get(snapshot.race.id);
+        if (merged?.deleted) {
+          const rid = merged.id;
+          await Promise.all([
+            db.distances.where({ raceId: rid }).delete(),
+            db.timingPoints.where({ raceId: rid }).delete(),
+            db.participants.where({ raceId: rid }).delete(),
+            db.registrations.where({ raceId: rid }).delete(),
+            db.queueEntries.where({ raceId: rid }).delete(),
+          ]);
+          return;
+        }
       }
       for (const d of snapshot.distances) {
         const ex = await db.distances.get(d.id);

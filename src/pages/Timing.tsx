@@ -144,8 +144,32 @@ export default function Timing() {
 
   if (!race) return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
 
+  // Løpet er slettet av arrangøren. En stasjon står da igjen uten noe å gjøre
+  // og bør få vite hvorfor, i stedet for å tro at oppsettet er på vei.
+  if (race.deleted)
+    return (
+      <Screen title="Løpet er slettet" back={auth.kind === "admin" ? "/" : undefined}>
+        <div className="empty">
+          Arrangøren har slettet dette løpet.
+          {auth.kind === "station" && (
+            <div style={{ marginTop: 14 }}>
+              <button
+                className="ghost"
+                onClick={() => {
+                  logout();
+                  navigate("/login");
+                }}
+              >
+                Logg ut
+              </button>
+            </div>
+          )}
+        </div>
+      </Screen>
+    );
+
   async function addToQueue(bib: string) {
-    if (!bib || !selectedTP) return;
+    if (!bib || !selectedTP || finished) return;
     const exists = (queue ?? []).some((q) => !q.deleted && q.bib === bib);
     if (exists) {
       toast(`#${bib} er allerede i køen`);
@@ -173,7 +197,7 @@ export default function Timing() {
   }
 
   async function recordFinish(bib: string) {
-    if (!selectedTP) return;
+    if (!selectedTP || finished) return;
     const wall = Date.now();
     const ts = wall + clockOffset;
     const reg: Registration = {
@@ -253,9 +277,13 @@ export default function Timing() {
     .sort((a, b) => a.addedAt - b.addedAt);
   const recentVisible = (recent ?? []).filter((r) => !r.deleted).slice(0, 10);
   const registerLabel = tp?.kind === "split" ? "Registrer" : "MÅL";
-  const unstartedMass = (distances ?? []).filter(
-    (d) => d.startType === "mass" && d.massStartTime == null,
-  );
+  // Avsluttet løp: ingen nye passeringer. Arrangøren kan gjenåpne.
+  const finished = race?.status === "finished";
+  const unstartedMass = finished
+    ? []
+    : (distances ?? []).filter(
+        (d) => d.startType === "mass" && d.massStartTime == null,
+      );
 
   // Forventede løpere er bare nyttig når distansen har mellomtider.
   // Uten mellomtider finnes ingen tidligere passeringer å beregne ETA fra.
@@ -354,7 +382,18 @@ export default function Timing() {
         </div>
       )}
 
-      {tp && (
+      {finished && (
+        <div className="card" style={{ borderColor: "var(--warning)" }}>
+          <div style={{ fontWeight: 600 }}>🏁 Løpet er avsluttet</div>
+          <div className="tiny muted" style={{ marginTop: 4 }}>
+            {auth.kind === "station"
+              ? "Registrering er låst. Ta kontakt med arrangøren hvis noen mangler."
+              : "Registrering er låst. Gjenåpne løpet fra løpssiden hvis noen mangler."}
+          </div>
+        </div>
+      )}
+
+      {tp && !finished && (
         <>
           {/* Forventede løpere – kun de med beregnet ETA */}
           {expectedWithEta.length > 0 && (
