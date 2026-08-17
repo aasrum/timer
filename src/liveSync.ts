@@ -28,8 +28,14 @@ export async function syncOnce(raceId: string): Promise<void> {
   // innstilling og legges på registreringstidspunkter, slik at tider fra
   // enheter med feilstilt klokke blir sammenlignbare.
   const offset = Math.round(remote.serverTime - (t0 + t1) / 2);
-  const prev = await getSetting<number>("clockOffsetMs", 0);
-  if (Math.abs(offset - prev) > 250) await setSetting("clockOffsetMs", offset);
+  // Skriv alltid ved første måling, også når avviket er ~0: at målingen er
+  // gjort er i seg selv informasjon (startklokka skiller «ikke synkronisert»
+  // fra «synkronisert, avvik neglisjerbart»). Deretter bare ved reell endring,
+  // så ikke hver synk gir en skriving.
+  const prev = await getSetting<number | null>("clockOffsetMs", null);
+  if (prev === null || Math.abs(offset - prev) > 250) {
+    await setSetting("clockOffsetMs", offset);
+  }
   await mergeRaceSnapshot(remote as unknown as RaceSnapshot);
 }
 

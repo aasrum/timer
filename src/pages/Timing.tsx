@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   db,
   getStationId,
@@ -339,6 +339,9 @@ export default function Timing() {
           <span className="tiny muted">
             Rolle: {auth.role === "finish" ? "Mål" : auth.role === "split" ? "Rundetid" : "Forvarsel"}
           </span>
+          <Link className="ghost small" to={`/race/${raceId}/clock`}>
+            🕐 Startklokke
+          </Link>
           <button
             className="ghost small"
             onClick={() => {

@@ -9,6 +9,7 @@ import RaceSetup from "./pages/RaceSetup";
 import ImportStartlist from "./pages/ImportStartlist";
 import Participants from "./pages/Participants";
 import Stations from "./pages/Stations";
+import StartClock from "./pages/StartClock";
 import Timing from "./pages/Timing";
 import Results from "./pages/Results";
 import PublicResults from "./pages/PublicResults";
@@ -109,6 +110,16 @@ export default function App() {
             element={
               <RequireRaceAccess>
                 <Timing />
+              </RequireRaceAccess>
+            }
+          />
+          {/* Startklokka er nyttig for stasjoner også: en enhet på startstreken
+              bruker den til å synkronisere og telle ned. */}
+          <Route
+            path="/race/:raceId/clock"
+            element={
+              <RequireRaceAccess>
+                <StartClock />
               </RequireRaceAccess>
             }
           />

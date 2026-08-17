@@ -114,6 +114,14 @@ export default function RaceDashboard() {
         <span aria-hidden>›</span>
       </Link>
 
+      <Link className="list-item" to={`/race/${raceId}/clock`} style={link}>
+        <div className="grow">
+          <div className="big">🕐 Startklokke</div>
+          <div className="muted tiny">Synkronisering og nedtelling til start</div>
+        </div>
+        <span aria-hidden>›</span>
+      </Link>
+
       <Link className="list-item" to={`/race/${raceId}/results`} style={link}>
         <div className="grow">
           <div className="big">🏁 Resultater</div>
