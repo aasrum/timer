@@ -195,6 +195,7 @@ export default function ImportStartlist() {
     <Screen
       title="Importer startliste"
       back={`/race/${raceId}`}
+      home
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       <div className="card">

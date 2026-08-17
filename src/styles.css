@@ -70,6 +70,17 @@ header.topbar h1 {
   padding: 4px 8px;
 }
 
+/* Hjem-snarvei ved siden av tilbake-pilen. Litt mindre enn pilen, så den
+   leses som sekundær – tilbake er fortsatt hovedveien ut av en skjerm. */
+.home-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 21px;
+  line-height: 1;
+  padding: 4px 6px;
+  margin-left: -6px;
+}
+
 a {
   color: #93c5fd;
 }

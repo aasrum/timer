@@ -36,11 +36,18 @@ export const useToast = () => useContext(ToastCtx);
 export function Screen({
   title,
   back,
+  home,
   actions,
   children,
 }: {
   title: string;
   back?: string;
+  /**
+   * Vis snarvei til løpsoversikten. Tilbake-pilen går bare ett nivå opp, så
+   * uten denne er det tre trykk hjem fra f.eks. startklokka. Utelates for
+   * stasjoner, som ikke har noen oversikt å gå til.
+   */
+  home?: boolean;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -50,6 +57,11 @@ export function Screen({
         {back != null && (
           <Link className="back-link" to={back} aria-label="Tilbake">
             ‹
+          </Link>
+        )}
+        {home && (
+          <Link className="home-link" to="/" aria-label="Til løpsoversikten">
+            ⌂
           </Link>
         )}
         <h1>{title}</h1>

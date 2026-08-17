@@ -138,6 +138,7 @@ export default function Stations() {
     <Screen
       title="Stasjoner"
       back={`/race/${raceId}`}
+      home
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       <div className="tiny muted" style={{ marginBottom: 12 }}>

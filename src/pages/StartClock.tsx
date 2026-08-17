@@ -90,7 +90,12 @@ export default function StartClock() {
   return (
     <Screen
       title="Startklokke"
-      back={`/race/${raceId}`}
+      // Stasjoner har ikke tilgang til løpssiden (og ingen løpsoversikt), så
+      // de sendes tilbake til tidtakingen de kom fra.
+      back={
+        auth.kind === "admin" ? `/race/${raceId}` : `/race/${raceId}/timing`
+      }
+      home={auth.kind === "admin"}
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       <div className="clock-hero">

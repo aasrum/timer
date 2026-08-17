@@ -236,6 +236,7 @@ export default function Results() {
     <Screen
       title="Resultater"
       back={`/race/${raceId}`}
+      home
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       {/* Distansefilter */}

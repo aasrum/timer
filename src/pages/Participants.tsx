@@ -59,6 +59,7 @@ export default function Participants() {
     <Screen
       title="Deltakere"
       back={`/race/${raceId}`}
+      home
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       <div className="tabs">

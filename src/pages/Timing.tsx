@@ -303,6 +303,7 @@ export default function Timing() {
     <Screen
       title="Tidtaking"
       back={auth.kind === "admin" ? `/race/${raceId}` : undefined}
+      home={auth.kind === "admin"}
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       <div className="card row spread">

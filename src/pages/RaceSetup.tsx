@@ -106,6 +106,7 @@ export default function RaceSetup() {
     <Screen
       title="Oppsett"
       back={`/race/${raceId}`}
+      home
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
       <div className="card">
