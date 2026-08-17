@@ -136,8 +136,10 @@ export default function Home() {
               <div className="grow">
                 <div className="big">{r.name}</div>
                 <div className="muted tiny">
-                  {r.date} · {r.participants} deltakere · {r.registrations}{" "}
-                  passeringer
+                  {r.date} · {r.participants}{" "}
+                  {r.participants === 1 ? "deltaker" : "deltakere"} ·{" "}
+                  {r.registrations}{" "}
+                  {r.registrations === 1 ? "passering" : "passeringer"}
                 </div>
               </div>
               <button
