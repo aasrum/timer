@@ -42,6 +42,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // Bruksanvisningene har innebygde skjermbilder og veier ~1,9 MB.
+        // De hentes ved behov i stedet for å forsinke første oppstart på en
+        // telefon med svak dekning – appen selv må være rask å få opp.
+        globIgnores: ["hjelp/**"],
+        navigateFallbackDenylist: [/^\/hjelp\//],
       },
     }),
   ],

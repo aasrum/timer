@@ -24,6 +24,42 @@ export default function Settings() {
         </div>
       </div>
 
+      <h2>Bruksanvisning</h2>
+      <div className="card">
+        {/* Vanlige lenker, ikke ruter: sidene ligger som statiske filer i
+            public/hjelp og serveres ved siden av appen. */}
+        <a
+          className="list-item"
+          href="/hjelp/malestasjon.html"
+          target="_blank"
+          rel="noreferrer"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="grow">
+            <div>📋 For målestasjoner</div>
+            <div className="tiny muted">
+              Registrering, tett målgang, rette feil
+            </div>
+          </div>
+          <span aria-hidden>›</span>
+        </a>
+        <a
+          className="list-item"
+          href="/hjelp/arrangor.html"
+          target="_blank"
+          rel="noreferrer"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="grow">
+            <div>⚙ For arrangør</div>
+            <div className="tiny muted">
+              Oppsett, startliste, stasjoner, resultater
+            </div>
+          </div>
+          <span aria-hidden>›</span>
+        </a>
+      </div>
+
       <h2>Innlogging</h2>
       <div className="card">
         <div className="row spread">
