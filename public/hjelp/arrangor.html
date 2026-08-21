@@ -128,12 +128,39 @@ footer.bunn {
   .ark { padding: 0 14px 60px; }
 }
 @media print {
-  body { background: #fff; }
-  header.topp { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Skjermbildene er tatt i mobilformat og blir svært høye på papir. Uten
+     en høydebegrensning blir veiledningen tre ganger så mange sider som
+     den trenger å være. */
+  body { background: #fff; font-size: 11pt; line-height: 1.45; }
+  header.topp {
+    background: #0f172a !important; padding: 20px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  header.topp h1 { font-size: 26pt; }
+  header.topp p { font-size: 11pt; }
   nav.innhold { display: none; }
-  section { break-inside: avoid-page; }
-  .boks { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  a { color: inherit; }
+  .ark { padding: 0; }
+
+  section { break-inside: auto; margin-bottom: 20px; }
+  h2.seksjon { break-after: avoid; font-size: 16pt; margin-top: 14px; }
+  h3 { break-after: avoid; font-size: 12pt; margin: 14px 0 5px; }
+  p, li { orphans: 3; widows: 3; }
+
+  figure {
+    break-inside: avoid; margin: 10px 0; padding: 8px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  figure img { max-height: 95mm; width: auto; max-width: 100%; }
+  figure.bred img { max-height: 80mm; }
+  figcaption { font-size: 9.5pt; margin-top: 7px; }
+
+  .boks { break-inside: avoid; margin: 12px 0; padding: 10px 14px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  table { break-inside: auto; font-size: 10pt; }
+  tr { break-inside: avoid; }
+  th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .steg > li { margin-bottom: 8px; }
+  a { color: inherit; text-decoration: none; }
 }
 </style>
 </head>
