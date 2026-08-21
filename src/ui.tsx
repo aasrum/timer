@@ -106,6 +106,41 @@ export function SyncBadge({
   );
 }
 
+// ── Hold skjermen tent ────────────────────────────────────────────────────────
+
+/**
+ * Hindrer at skjermen slukker mens en skjerm står oppe under et løp – både
+ * målestasjoner og startklokka står gjerne urørt i timevis.
+ *
+ * Krever HTTPS, og støttes ikke overalt (iOS fra 16.4). Slår det feil, slukker
+ * skjermen som normalt; sett «Auto-lås: Aldri» på enheten som reserve.
+ * Låsen mistes når fanen skjules, så den tas igjen når man er tilbake.
+ */
+export function useWakeLock(): void {
+  useEffect(() => {
+    let lock: WakeLockSentinel | null = null;
+    let stopped = false;
+    const request = async () => {
+      if (stopped) return;
+      try {
+        lock = (await navigator.wakeLock?.request("screen")) ?? null;
+      } catch {
+        // Ikke støttet, avslått, eller batterisparing – ikke noe å gjøre.
+      }
+    };
+    request();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") request();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void lock?.release().catch(() => {});
+    };
+  }, []);
+}
+
 // ── Online/offline-indikator ──────────────────────────────────────────────────
 
 export function useOnline(): boolean {

@@ -5,7 +5,7 @@ import { useAuth } from "../auth";
 import { db, type Distance } from "../db";
 import { useLiveSync } from "../liveSync";
 import { formatClock } from "../time";
-import { Screen, SyncBadge, useToast } from "../ui";
+import { Screen, SyncBadge, useToast, useWakeLock } from "../ui";
 
 /**
  * Startklokke: en stor, serverkorrigert klokke til å synkronisere klokker mot
@@ -37,29 +37,9 @@ export default function StartClock() {
     return () => clearInterval(t);
   }, []);
 
-  // Hold skjermen tent – denne skjermen står typisk oppe på et startbord.
-  useEffect(() => {
-    let lock: WakeLockSentinel | null = null;
-    let released = false;
-    const request = async () => {
-      try {
-        lock = await navigator.wakeLock?.request("screen");
-      } catch {
-        // Ikke støttet eller avslått: skjermen slukker som normalt.
-      }
-    };
-    request();
-    // Låsen mistes når fanen skjules; ta den igjen når man er tilbake.
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && !released) request();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      released = true;
-      document.removeEventListener("visibilitychange", onVisible);
-      void lock?.release().catch(() => {});
-    };
-  }, []);
+  // Denne skjermen står typisk oppe på et startbord – og brukes som tidsvitne
+  // foran et kamera ved mål, der den må være lesbar hele opptaket.
+  useWakeLock();
 
   // Raden mangler helt til første synk er gjennomført – da er avviket ukjent,
   // ikke null. Verdien 0 betyr «målt, og enhetens klokke stemmer».

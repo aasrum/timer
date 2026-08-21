@@ -79,16 +79,24 @@ export function useLiveSync(raceId: string | undefined): {
     tick();
     const interval = setInterval(tick, SYNC_INTERVAL_MS);
     const onOnline = () => tick();
+    // Uten denne ville merket vist «Synket» i inntil 15 sekunder etter at
+    // dekningen forsvant. En frivillig som mister nettet skal se det med én
+    // gang, ikke tro at registreringene fortsatt går gjennom.
+    const onOffline = () => {
+      if (!stopped) setStatus("offline");
+    };
     const onVisible = () => {
       if (document.visibilityState === "visible") tick();
     };
     window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       stopped = true;
       clearInterval(interval);
       window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
       document.removeEventListener("visibilitychange", onVisible);
       // Skyll ut endringer med én gang siden forlates, i stedet for å vente
       // på neste intervall. Uten dette kan en arrangør sette opp løpet og gå

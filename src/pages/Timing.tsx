@@ -15,7 +15,7 @@ import { useAuth } from "../auth";
 import { useLiveSync } from "../liveSync";
 import { computeExpectedAt, computeResult, startTimeFor } from "../results";
 import { formatClock, formatClockTenths, formatDuration, formatPace } from "../time";
-import { Screen, SyncBadge, useToast } from "../ui";
+import { Screen, SyncBadge, useToast, useWakeLock } from "../ui";
 
 export default function Timing() {
   const { raceId = "" } = useParams();
@@ -75,6 +75,11 @@ export default function Timing() {
     const t = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(t);
   }, []);
+
+  // En stasjon står gjerne urørt i timevis mellom passeringene. Slukner
+  // skjermen må den frivillige vekke og låse opp enheten før hen rekker å
+  // registrere – i verste fall mens løperen krysser streken.
+  useWakeLock();
 
   const selectedTP = (selectedSetting?.value as string) || "";
 
