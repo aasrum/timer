@@ -82,6 +82,13 @@ export function computeResult(
   distance: Distance | undefined,
   timingPoints: TimingPoint[],
   registrations: Registration[],
+  /**
+   * Tidspunktet resultatene regnes ut for. En starttid kan settes i forkant
+   * (startklokka oppfordrer til nettopp det, for å telle ned mot den) – uten
+   * `now` ville en løper med i morgen som starttid vist som "underveis" i
+   * dag, siden startTimeFor da allerede returnerer en verdi.
+   */
+  now: number = Date.now(),
 ): ParticipantResult {
   const start = startTimeFor(participant, distance);
   const points = timingPoints
@@ -139,7 +146,11 @@ export function computeResult(
       : undefined;
 
   const status: ParticipantResult["status"] =
-    finishAt != null ? "finished" : start != null ? "started" : "no-start";
+    finishAt != null
+      ? "finished"
+      : start != null && start <= now
+        ? "started"
+        : "no-start";
 
   return {
     participant,
