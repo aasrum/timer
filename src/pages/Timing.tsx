@@ -58,6 +58,7 @@ export default function Timing() {
   const [bibInput, setBibInput] = useState("");
   const [now, setNow] = useState(Date.now());
   const [showAllExpected, setShowAllExpected] = useState(false);
+  const [assignInputs, setAssignInputs] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -138,7 +139,29 @@ export default function Timing() {
   // mellom renders og React kaster «Rendered more hooks than during the
   // previous render».
   const registeredBibs = useMemo(
-    () => new Set((recent ?? []).filter((r) => !r.deleted).map((r) => r.bib)),
+    () =>
+      new Set(
+        (recent ?? []).filter((r) => !r.deleted && r.bib).map((r) => r.bib),
+      ),
+    [recent],
+  );
+
+  // Medgått tid kan bare vises for en fanget tid når det er utvetydig hvilken
+  // start den hører til – altså én fellesstart-distanse i løpet.
+  const startForTP = useMemo(() => {
+    const mass = (distances ?? []).filter(
+      (d) => d.startType === "mass" && d.massStartTime != null,
+    );
+    return mass.length === 1 ? mass[0].massStartTime : undefined;
+  }, [distances]);
+
+  // Tider fanget uten startnummer, eldste først: de skal knyttes i den
+  // rekkefølgen løperne passerte.
+  const unassigned = useMemo(
+    () =>
+      (recent ?? [])
+        .filter((r) => !r.deleted && !r.bib)
+        .sort((a, b) => a.timestamp - b.timestamp),
     [recent],
   );
 
@@ -196,31 +219,65 @@ export default function Timing() {
     inputRef.current?.focus();
   }
 
-  async function recordFinish(bib: string) {
-    if (!selectedTP || finished) return;
-
-    // Er startnummeret allerede registrert her? Det er nesten alltid en feil:
-    // et dobbelttrykk, eller et startnummer tastet i stedet for et annet. Uten
-    // denne sperren ville den nye tiden stilltiende erstattet den riktige –
-    // en løper som var i mål på 37:09 kunne ende med 69:14.
+  /**
+   * Er startnummeret allerede registrert her? Det er nesten alltid en feil:
+   * et dobbelttrykk, eller et startnummer tastet i stedet for et annet. Uten
+   * denne sperren ville den nye tiden stilltiende erstattet den riktige –
+   * en løper som var i mål på 37:09 kunne ende med 69:14.
+   */
+  function bekreftDublett(bib: string): boolean {
     const existing = (recent ?? [])
       .filter((r) => !r.deleted && r.bib === bib)
       .sort((a, b) => b.timestamp - a.timestamp)[0];
-    if (existing) {
-      const p = pMap.get(bib);
-      const navn = p ? `${p.name} (#${bib})` : `#${bib}`;
-      const start = p ? startTimeFor(p, dMap.get(p.distanceId)) : undefined;
-      const gikk =
-        start != null ? ` – tid ${formatDuration(existing.timestamp - start)}` : "";
-      if (
-        !confirm(
-          `${navn} er allerede registrert ved ${tp?.name} kl ${formatClock(
-            existing.timestamp,
-          )}${gikk}.\n\nRegistrere på nytt? Den nye tiden blir gjeldende, og den gamle forkastes.`,
-        )
-      )
-        return;
-    }
+    if (!existing) return true;
+    const p = pMap.get(bib);
+    const navn = p ? `${p.name} (#${bib})` : `#${bib}`;
+    const start = p ? startTimeFor(p, dMap.get(p.distanceId)) : undefined;
+    const gikk =
+      start != null ? ` – tid ${formatDuration(existing.timestamp - start)}` : "";
+    return confirm(
+      `${navn} er allerede registrert ved ${tp?.name} kl ${formatClock(
+        existing.timestamp,
+      )}${gikk}.\n\nRegistrere på nytt? Den nye tiden blir gjeldende, og den gamle forkastes.`,
+    );
+  }
+
+  /**
+   * Tid uten startnummer. Ved tett målgang rekker man ikke å taste numre –
+   * da fanger man passeringene i rekkefølge og knytter numrene til etterpå.
+   * Tiden er det eneste som ikke kan hentes inn igjen i ettertid.
+   */
+  async function recordTimeOnly() {
+    if (!selectedTP || finished) return;
+    const ts = Date.now() + clockOffset;
+    await db.registrations.add({
+      id: uid(),
+      raceId,
+      bib: "",
+      timingPointId: selectedTP,
+      timestamp: ts,
+      stationId,
+      deleted: false,
+      createdAt: ts,
+      updatedAt: ts,
+    });
+    toast(`Tid tatt ${formatClockTenths(ts)}`);
+  }
+
+  /** Knytter et startnummer til en tid som allerede er fanget. */
+  async function assignBib(reg: Registration, bib: string) {
+    const b = bib.trim();
+    if (!b) return;
+    if (!bekreftDublett(b)) return;
+    await db.registrations.update(reg.id, { bib: b, updatedAt: Date.now() });
+    setAssignInputs((m) => ({ ...m, [reg.id]: "" }));
+    const p = pMap.get(b);
+    toast(`${formatClockTenths(reg.timestamp)} → ${p ? p.name : `#${b}`}`);
+  }
+
+  async function recordFinish(bib: string) {
+    if (!selectedTP || finished) return;
+    if (!bekreftDublett(bib)) return;
 
     const wall = Date.now();
     const ts = wall + clockOffset;
@@ -299,7 +356,9 @@ export default function Timing() {
   const sortedQueue = (queue ?? [])
     .filter((q) => !q.deleted && !registeredBibs.has(q.bib))
     .sort((a, b) => a.addedAt - b.addedAt);
-  const recentVisible = (recent ?? []).filter((r) => !r.deleted).slice(0, 10);
+  const recentVisible = (recent ?? [])
+    .filter((r) => !r.deleted && r.bib)
+    .slice(0, 10);
   const registerLabel = tp?.kind === "split" ? "Registrer" : "MÅL";
   // Avsluttet løp: ingen nye passeringer. Arrangøren kan gjenåpne.
   const finished = race?.status === "finished";
@@ -548,6 +607,72 @@ export default function Timing() {
               Legg i kø når deltakeren nærmer seg. Trykk {registerLabel} når hen passerer.
             </div>
           </div>
+
+          {/* Tett målgang: fang tiden nå, finn nummeret etterpå. */}
+          <button className="take-time" onClick={recordTimeOnly}>
+            ⏱ TA TID
+            <span className="tiny">uten startnummer – knyttes etterpå</span>
+          </button>
+
+          {unassigned.length > 0 && (
+            <>
+              <h2>Tider uten startnummer ({unassigned.length})</h2>
+              <div className="tiny muted" style={{ marginBottom: 8 }}>
+                Eldste først – samme rekkefølge som løperne passerte.
+              </div>
+              {unassigned.map((r, i) => {
+                const kandidat = pMap.get((assignInputs[r.id] ?? "").trim());
+                return (
+                  <div className="unassigned-item" key={r.id}>
+                    <div className="unassigned-head">
+                      <span className="unassigned-index mono">{i + 1}</span>
+                      <span className="unassigned-time mono">
+                        {startForTP != null
+                          ? formatDuration(r.timestamp - startForTP)
+                          : formatClockTenths(r.timestamp)}
+                      </span>
+                      <span className="tiny muted">
+                        kl {formatClockTenths(r.timestamp)}
+                      </span>
+                      <button
+                        className="ghost small"
+                        onClick={() => undo(r)}
+                        aria-label="Forkast tiden"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="unassigned-assign">
+                      <input
+                        className="assign-bib"
+                        inputMode="numeric"
+                        placeholder="nr"
+                        value={assignInputs[r.id] ?? ""}
+                        onChange={(e) =>
+                          setAssignInputs((m) => ({ ...m, [r.id]: e.target.value }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter")
+                            assignBib(r, assignInputs[r.id] ?? "");
+                        }}
+                      />
+                      <span className="grow tiny muted">
+                        {(assignInputs[r.id] ?? "").trim()
+                          ? (kandidat?.name ?? "Ukjent startnummer")
+                          : ""}
+                      </span>
+                      <button
+                        className="finish-btn"
+                        onClick={() => assignBib(r, assignInputs[r.id] ?? "")}
+                      >
+                        Knytt
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
 
           <h2>I kø ({sortedQueue.length})</h2>
           {sortedQueue.length === 0 && (

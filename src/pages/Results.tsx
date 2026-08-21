@@ -80,6 +80,21 @@ export default function Results() {
   const sorted = sortResults(filtered);
   const conflictCount = sorted.filter((r) => r.conflicts.length > 0).length;
 
+  // Registrerte tider som ikke havner i resultatlisten fordi startnummeret
+  // ikke finnes blant deltakerne, eller fordi tiden ennå ikke er knyttet til
+  // et nummer. Begge deler er tapte tider hvis de ikke oppdages.
+  const løseTider = useMemo(() => {
+    const kjente = new Set((participants ?? []).map((p) => p.bib));
+    const ukjenteBibs = new Set<string>();
+    let utenNummer = 0;
+    for (const r of registrations ?? []) {
+      if (r.deleted) continue;
+      if (!r.bib) utenNummer++;
+      else if (!kjente.has(r.bib)) ukjenteBibs.add(r.bib);
+    }
+    return { ukjente: [...ukjenteBibs].sort(), utenNummer };
+  }, [registrations, participants]);
+
   const splitPoints = useMemo(() => {
     if (distanceFilter === "all") return [];
     return (timingPoints ?? [])
@@ -283,6 +298,33 @@ export default function Results() {
           </select>
         )}
       </div>
+
+      {(løseTider.ukjente.length > 0 || løseTider.utenNummer > 0) && (
+        <div className="card" style={{ borderColor: "var(--warning)" }}>
+          <div style={{ fontWeight: 600 }}>⚠ Tider som ikke er med i listen</div>
+          {løseTider.ukjente.length > 0 && (
+            <div className="tiny" style={{ marginTop: 6 }}>
+              Startnummer uten deltaker:{" "}
+              <span className="mono">
+                {løseTider.ukjente.map((b) => `#${b}`).join(", ")}
+              </span>
+              <div className="muted">
+                Legg dem til under Deltakere for å få dem med.
+              </div>
+            </div>
+          )}
+          {løseTider.utenNummer > 0 && (
+            <div className="tiny" style={{ marginTop: 6 }}>
+              {løseTider.utenNummer}{" "}
+              {løseTider.utenNummer === 1 ? "tid er" : "tider er"} fanget uten
+              startnummer.
+              <div className="muted">
+                Knytt dem til startnummer på tidtakingsskjermen.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {conflictCount > 0 && (
         <div className="card" style={{ borderColor: "var(--warning)" }}>

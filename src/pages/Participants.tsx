@@ -19,8 +19,28 @@ export default function Participants() {
     () => db.participants.where({ raceId }).toArray(),
     [raceId],
   );
+  const registrations = useLiveQuery(
+    () => db.registrations.where({ raceId }).toArray(),
+    [raceId],
+  );
   const toast = useToast();
   const [filter, setFilter] = useState<string>("all");
+
+  // Startnummer som er registrert ute i løypa, men som ikke står i
+  // startlisten – f.eks. en etteranmeldt løper. Uten denne listen ville
+  // tidene deres blitt liggende usynlige, siden resultatene bygges fra
+  // deltakerlisten.
+  const ukjenteNumre = (() => {
+    const kjente = new Set((participants ?? []).map((p) => p.bib));
+    const teller = new Map<string, number>();
+    for (const r of registrations ?? []) {
+      if (r.deleted || !r.bib || kjente.has(r.bib)) continue;
+      teller.set(r.bib, (teller.get(r.bib) ?? 0) + 1);
+    }
+    return [...teller.entries()]
+      .map(([bib, antall]) => ({ bib, antall }))
+      .sort((a, b) => Number(a.bib) - Number(b.bib) || a.bib.localeCompare(b.bib));
+  })();
 
   if (!race) return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
 
@@ -55,6 +75,26 @@ export default function Participants() {
     toast("Deltaker slettet");
   }
 
+  /** Gjør et registrert, men ukjent startnummer om til en deltaker. */
+  async function leggTilFraNummer(bib: string) {
+    const distanceId = filter !== "all" ? filter : distances?.[0]?.id;
+    if (!distanceId) {
+      toast("Opprett en distanse først");
+      return;
+    }
+    await db.participants.add({
+      id: uid(),
+      raceId,
+      bib,
+      // Midlertidig navn, ikke tomt: uten det står raden navnløs i
+      // resultatlisten og i eksporten hvis navnet aldri blir fylt inn.
+      name: `Ukjent #${bib}`,
+      distanceId,
+      updatedAt: Date.now(),
+    });
+    toast(`#${bib} lagt til – skriv inn navnet`);
+  }
+
   return (
     <Screen
       title="Deltakere"
@@ -62,6 +102,38 @@ export default function Participants() {
       home
       actions={<SyncBadge status={sync.status} lastSyncedAt={sync.lastSyncedAt} />}
     >
+      {ukjenteNumre.length > 0 && (
+        <div className="card" style={{ borderColor: "var(--warning)" }}>
+          <div style={{ fontWeight: 600 }}>
+            ⚠ {ukjenteNumre.length} startnummer uten deltaker
+          </div>
+          <div className="tiny muted" style={{ margin: "4px 0 10px" }}>
+            Disse er registrert ute i løypa, men står ikke i startlisten.
+            Tidene er lagret – legg dem til her for å få dem med i
+            resultatene, og skriv inn navnet etterpå.
+          </div>
+          {ukjenteNumre.map((u) => (
+            <div className="row spread" key={u.bib} style={{ marginBottom: 6 }}>
+              <span>
+                <span className="mono" style={{ fontWeight: 700 }}>
+                  #{u.bib}
+                </span>
+                <span className="tiny muted">
+                  {" "}
+                  · {u.antall} {u.antall === 1 ? "passering" : "passeringer"}
+                </span>
+              </span>
+              <button
+                className="ghost small"
+                onClick={() => leggTilFraNummer(u.bib)}
+              >
+                Legg til deltaker
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="tabs">
         <button
           className={filter === "all" ? "active" : ""}

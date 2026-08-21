@@ -233,6 +233,77 @@ button:disabled {
   padding: 32px 16px;
 }
 
+/* «Ta tid»: skal treffes uten å se ned, ved tett målgang. */
+.take-time {
+  width: 100%;
+  min-height: 72px;
+  margin: 10px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: var(--surface-2);
+  border: 2px solid var(--warning);
+  color: var(--text);
+}
+
+.take-time .tiny {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+/* Fanget tid som venter på startnummer. To rader, slik at selve tiden får
+   plass i full bredde – den klippes ellers på smale skjermer. */
+.unassigned-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.unassigned-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.unassigned-index {
+  color: var(--muted);
+  font-weight: 700;
+  min-width: 1.5em;
+}
+
+.unassigned-time {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  flex: 1;
+}
+
+.unassigned-assign {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Feltet der et startnummer knyttes til en fanget tid. */
+.assign-bib {
+  width: 74px;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 4px;
+}
+
 /* Startklokke: skal kunne leses på avstand av startpersonell, og skalere
    fra mobil i portrett til iPad i landskap. clamp() i vw gjør at sifrene
    fyller bredden uten å brekke på små skjermer. */
