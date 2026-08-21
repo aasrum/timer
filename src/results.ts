@@ -45,6 +45,16 @@ export interface SplitResult {
   paceSecPerKm?: number;
 }
 
+/** To passeringer for samme startnummer på samme punkt, langt fra hverandre. */
+export interface RegistrationConflict {
+  timingPoint: TimingPoint;
+  count: number;
+  /** Tid mellom første og siste passering. */
+  spreadMs: number;
+  firstAt: number;
+  lastAt: number;
+}
+
 export interface ParticipantResult {
   participant: Participant;
   distance?: Distance;
@@ -55,7 +65,17 @@ export interface ParticipantResult {
   finishPaceSecPerKm?: number;
   splits: SplitResult[];
   status: "finished" | "started" | "no-start";
+  /**
+   * Punkter der samme startnummer er registrert flere ganger med stor
+   * avstand i tid. To enheter som fanger samme passering ligger sekunder
+   * fra hverandre; et feiltastet startnummer ligger minutter unna. Kun det
+   * siste er verdt å varsle om.
+   */
+  conflicts: RegistrationConflict[];
 }
+
+/** Over denne avstanden regnes to passeringer som en reell konflikt. */
+export const CONFLICT_THRESHOLD_MS = 30000;
 
 export function computeResult(
   participant: Participant,
@@ -69,10 +89,33 @@ export function computeResult(
     .sort((a, b) => a.order - b.order);
 
   const splits: SplitResult[] = [];
+  const conflicts: RegistrationConflict[] = [];
   let finishAt: number | undefined;
   for (const tp of points) {
     const reg = latestRegistration(registrations, participant.bib, tp.id);
     const passedAt = reg?.timestamp;
+
+    // Se etter flere passeringer på samme punkt. En feiltasting som treffer
+    // et startnummer som alt er i mål, ville ellers stilltiende overskrive
+    // den riktige tiden med en mye senere.
+    const atPoint = registrations.filter(
+      (r) => !r.deleted && r.bib === participant.bib && r.timingPointId === tp.id,
+    );
+    if (atPoint.length > 1) {
+      const times = atPoint.map((r) => r.timestamp);
+      const firstAt = Math.min(...times);
+      const lastAt = Math.max(...times);
+      if (lastAt - firstAt > CONFLICT_THRESHOLD_MS) {
+        conflicts.push({
+          timingPoint: tp,
+          count: atPoint.length,
+          spreadMs: lastAt - firstAt,
+          firstAt,
+          lastAt,
+        });
+      }
+    }
+
     const elapsedMs =
       passedAt != null && start != null ? passedAt - start : undefined;
     const distanceM = tpDistanceM(tp, distance);
@@ -108,6 +151,7 @@ export function computeResult(
     finishPaceSecPerKm,
     splits,
     status,
+    conflicts,
   };
 }
 

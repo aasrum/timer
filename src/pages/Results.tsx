@@ -78,6 +78,7 @@ export default function Results() {
   }, [allResults, genderFilter, categoryFilter]);
 
   const sorted = sortResults(filtered);
+  const conflictCount = sorted.filter((r) => r.conflicts.length > 0).length;
 
   const splitPoints = useMemo(() => {
     if (distanceFilter === "all") return [];
@@ -283,6 +284,20 @@ export default function Results() {
         )}
       </div>
 
+      {conflictCount > 0 && (
+        <div className="card" style={{ borderColor: "var(--warning)" }}>
+          <div style={{ fontWeight: 600 }}>
+            ⚠ {conflictCount} {conflictCount === 1 ? "deltaker" : "deltakere"} har
+            flere passeringer på samme punkt
+          </div>
+          <div className="tiny muted" style={{ marginTop: 4 }}>
+            Som regel et startnummer tastet i stedet for et annet. Den seneste
+            passeringen er brukt – kontroller de merkede radene før du
+            publiserer resultatene.
+          </div>
+        </div>
+      )}
+
       <div className="fab-row">
         <button className="ghost" onClick={exportCsv}>
           Eksporter CSV
@@ -336,6 +351,19 @@ export default function Results() {
                     <td className="mono">{r.participant.bib}</td>
                     <td>
                       {r.participant.name}
+                      {r.conflicts.map((c) => (
+                        <div
+                          key={c.timingPoint.id}
+                          className="tiny"
+                          style={{ color: "var(--warning)" }}
+                          title={`${c.count} passeringer ved ${c.timingPoint.name}: ${formatClock(
+                            c.firstAt,
+                          )} og ${formatClock(c.lastAt)}. Seneste er brukt.`}
+                        >
+                          ⚠ {c.count} passeringer ved {c.timingPoint.name} (
+                          {formatDuration(c.spreadMs)} fra hverandre)
+                        </div>
+                      ))}
                       {r.participant.club && (
                         <div className="tiny muted">{r.participant.club}</div>
                       )}

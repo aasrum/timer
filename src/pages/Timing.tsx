@@ -14,7 +14,7 @@ import {
 import { useAuth } from "../auth";
 import { useLiveSync } from "../liveSync";
 import { computeExpectedAt, computeResult, startTimeFor } from "../results";
-import { formatClockTenths, formatDuration, formatPace } from "../time";
+import { formatClock, formatClockTenths, formatDuration, formatPace } from "../time";
 import { Screen, SyncBadge, useToast } from "../ui";
 
 export default function Timing() {
@@ -198,6 +198,30 @@ export default function Timing() {
 
   async function recordFinish(bib: string) {
     if (!selectedTP || finished) return;
+
+    // Er startnummeret allerede registrert her? Det er nesten alltid en feil:
+    // et dobbelttrykk, eller et startnummer tastet i stedet for et annet. Uten
+    // denne sperren ville den nye tiden stilltiende erstattet den riktige –
+    // en løper som var i mål på 37:09 kunne ende med 69:14.
+    const existing = (recent ?? [])
+      .filter((r) => !r.deleted && r.bib === bib)
+      .sort((a, b) => b.timestamp - a.timestamp)[0];
+    if (existing) {
+      const p = pMap.get(bib);
+      const navn = p ? `${p.name} (#${bib})` : `#${bib}`;
+      const start = p ? startTimeFor(p, dMap.get(p.distanceId)) : undefined;
+      const gikk =
+        start != null ? ` – tid ${formatDuration(existing.timestamp - start)}` : "";
+      if (
+        !confirm(
+          `${navn} er allerede registrert ved ${tp?.name} kl ${formatClock(
+            existing.timestamp,
+          )}${gikk}.\n\nRegistrere på nytt? Den nye tiden blir gjeldende, og den gamle forkastes.`,
+        )
+      )
+        return;
+    }
+
     const wall = Date.now();
     const ts = wall + clockOffset;
     const reg: Registration = {
