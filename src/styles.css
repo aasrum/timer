@@ -631,3 +631,15 @@ td.num {
   font-size: 11px;
   color: var(--success);
 }
+
+/* Rad for et startnummer som mangler deltaker, i varselet på resultatsiden. */
+.løs-tid {
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+
+.løs-tid:first-of-type {
+  border-top: none;
+}

@@ -96,15 +96,50 @@ export default function Results() {
   // et nummer. Begge deler er tapte tider hvis de ikke oppdages.
   const løseTider = useMemo(() => {
     const kjente = new Set((participants ?? []).map((p) => p.bib));
-    const ukjenteBibs = new Set<string>();
+    const tpMap = new Map((timingPoints ?? []).map((t) => [t.id, t]));
+    const perBib = new Map<
+      string,
+      { punkt: string; ts: number; distanceId: string; kind: string }[]
+    >();
     let utenNummer = 0;
     for (const r of registrations ?? []) {
       if (r.deleted) continue;
-      if (!r.bib) utenNummer++;
-      else if (!kjente.has(r.bib)) ukjenteBibs.add(r.bib);
+      if (!r.bib) {
+        utenNummer++;
+        continue;
+      }
+      if (kjente.has(r.bib)) continue;
+      const tp = tpMap.get(r.timingPointId);
+      if (!tp) continue;
+      const liste = perBib.get(r.bib) ?? [];
+      liste.push({
+        punkt: tp.name,
+        ts: r.timestamp,
+        distanceId: tp.distanceId,
+        kind: tp.kind,
+      });
+      perBib.set(r.bib, liste);
     }
-    return { ukjente: [...ukjenteBibs].sort(), utenNummer };
-  }, [registrations, participants]);
+    // Distansen kan utledes av hvor de faktisk ble registrert, så man slipper
+    // å gjette når løpet har flere distanser.
+    const ukjente = [...perBib.entries()]
+      .map(([bib, passeringer]) => {
+        const sortert = passeringer.sort((a, b) => a.ts - b.ts);
+        const distanceId = sortert[0].distanceId;
+        const start = dMap.get(distanceId)?.massStartTime;
+        return {
+          bib,
+          distanceId,
+          harMaal: sortert.some((x) => x.kind === "finish"),
+          passeringer: sortert.map((x) => ({
+            ...x,
+            medgatt: start != null ? x.ts - start : undefined,
+          })),
+        };
+      })
+      .sort((a, b) => Number(a.bib) - Number(b.bib) || a.bib.localeCompare(b.bib));
+    return { ukjente, utenNummer };
+  }, [registrations, participants, timingPoints, dMap]);
 
   /**
    * Mellomtidskolonner. På tvers av distanser tas distansenavnet med i
@@ -322,6 +357,23 @@ export default function Results() {
     toast(`#${bib}: passering fjernet`);
   }
 
+  /**
+   * Gjør et registrert, men ukjent startnummer om til en deltaker, på den
+   * distansen der passeringene faktisk ble gjort. Tidene som allerede ligger
+   * der, dukker opp i resultatene med én gang.
+   */
+  async function leggTilUkjent(bib: string, distanceId: string) {
+    await db.participants.add({
+      id: uid(),
+      raceId,
+      bib,
+      name: `Ukjent #${bib}`,
+      distanceId,
+      updatedAt: Date.now(),
+    });
+    toast(`#${bib} lagt til – skriv inn navnet under Deltakere`);
+  }
+
   /** Setter eller fjerner DNS/DNF på en deltaker. */
   async function settUtfall(
     participantId: string,
@@ -428,14 +480,43 @@ export default function Results() {
         <div className="card" style={{ borderColor: "var(--warning)" }}>
           <div style={{ fontWeight: 600 }}>⚠ Tider som ikke er med i listen</div>
           {løseTider.ukjente.length > 0 && (
-            <div className="tiny" style={{ marginTop: 6 }}>
-              Startnummer uten deltaker:{" "}
-              <span className="mono">
-                {løseTider.ukjente.map((b) => `#${b}`).join(", ")}
-              </span>
-              <div className="muted">
-                Legg dem til under Deltakere for å få dem med.
+            <div style={{ marginTop: 8 }}>
+              <div className="tiny muted" style={{ marginBottom: 6 }}>
+                Disse startnumrene er registrert ute i løypa, men står ikke i
+                startlisten. Tidene er lagret – legg dem til for å få dem med i
+                resultatene.
               </div>
+              {løseTider.ukjente.map((u) => (
+                <div className="row spread løs-tid" key={u.bib}>
+                  <div>
+                    <span className="mono" style={{ fontWeight: 700 }}>
+                      #{u.bib}
+                    </span>
+                    <span className="tiny">
+                      {" · "}
+                      {u.passeringer
+                        .map(
+                          (x) =>
+                            `${x.punkt} ${
+                              x.medgatt != null
+                                ? formatDuration(x.medgatt)
+                                : formatClock(x.ts)
+                            }`,
+                        )
+                        .join(" · ")}
+                      {!u.harMaal && (
+                        <span className="muted"> · ingen målpassering</span>
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    className="ghost small"
+                    onClick={() => leggTilUkjent(u.bib, u.distanceId)}
+                  >
+                    Legg til
+                  </button>
+                </div>
+              ))}
             </div>
           )}
           {løseTider.utenNummer > 0 && (
