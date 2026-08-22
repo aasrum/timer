@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db, uid, type Participant } from "../db";
@@ -25,6 +25,15 @@ export default function Participants() {
   );
   const toast = useToast();
   const [filter, setFilter] = useState<string>("all");
+  // Deltakere lagt til i denne økten, i den rekkefølgen de ble opprettet.
+  const [nyeIder, setNyeIder] = useState<string[]>([]);
+  const fokusId = useRef<string | null>(null);
+
+  // Bytter man distansefane er de nye radene ikke lenger nødvendigvis
+  // relevante; da sorteres alt normalt igjen.
+  useEffect(() => {
+    setNyeIder([]);
+  }, [filter]);
 
   // Startnummer som er registrert ute i løypa, men som ikke står i
   // startlisten – f.eks. en etteranmeldt løper. Uten denne listen ville
@@ -45,9 +54,22 @@ export default function Participants() {
   if (!race) return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
 
   const distMap = new Map((distances ?? []).map((d) => [d.id, d]));
-  const shown = (participants ?? [])
-    .filter((p) => filter === "all" || p.distanceId === filter)
+  const synlige = (participants ?? []).filter(
+    (p) => filter === "all" || p.distanceId === filter,
+  );
+
+  // Rader som er lagt til nå holdes nederst, ved knappen de ble opprettet
+  // med, i stedet for å sortere seg inn mens man skriver. Et tomt
+  // startnummer teller som 0 og ville ellers sendt raden til toppen, for så
+  // å flytte den ned igjen straks det første sifferet er tastet.
+  const nySet = new Set(nyeIder);
+  const sorterte = synlige
+    .filter((p) => !nySet.has(p.id))
     .sort((a, b) => Number(a.bib) - Number(b.bib) || a.bib.localeCompare(b.bib));
+  const nye = nyeIder
+    .map((id) => synlige.find((p) => p.id === id))
+    .filter((p): p is Participant => p != null);
+  const shown = [...sorterte, ...nye];
 
   async function update(id: string, patch: Partial<Participant>) {
     await db.participants.update(id, { ...patch, updatedAt: Date.now() });
@@ -68,6 +90,9 @@ export default function Participants() {
       updatedAt: Date.now(),
     };
     await db.participants.add(p);
+    setNyeIder((v) => [...v, p.id]);
+    // Sett markøren i nummerfeltet, så man kan taste med én gang.
+    fokusId.current = p.id;
   }
 
   async function remove(id: string) {
@@ -171,6 +196,14 @@ export default function Participants() {
                   inputMode="numeric"
                   value={p.bib}
                   onChange={(e) => update(p.id, { bib: e.target.value })}
+                  ref={(el) => {
+                    // Nyopprettet rad: hopp hit og gjør feltet klart å taste i.
+                    if (el && fokusId.current === p.id) {
+                      fokusId.current = null;
+                      el.focus();
+                      el.scrollIntoView({ block: "center", behavior: "smooth" });
+                    }
+                  }}
                 />
               </div>
               <div className="field grow">
