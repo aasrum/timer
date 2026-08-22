@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useParams } from "react-router-dom";
-import { db } from "../db";
+import { db, uid } from "../db";
 import {
   computeResult,
   sortResults,
   type ParticipantResult,
 } from "../results";
-import { formatClock, formatDuration, formatPace } from "../time";
+import {
+  formatClock,
+  formatClockTenths,
+  formatDuration,
+  formatPace,
+  parseTimeOfDay,
+} from "../time";
 import {
   downloadJson,
   downloadText,
@@ -43,6 +49,8 @@ export default function Results() {
   const [distanceFilter, setDistanceFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState<"" | "M" | "K">("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  // «deltakerId:tidspunktId» for cellen som redigeres, eller null.
+  const [rediger, setRediger] = useState<string | null>(null);
 
   const dMap = useMemo(
     () => new Map((distances ?? []).map((d) => [d.id, d])),
@@ -214,6 +222,67 @@ export default function Results() {
   async function exportBundle() {
     const bundle = await exportRace(raceId);
     downloadJson(`${slug(race!.name)}.lopstid.json`, bundle);
+  }
+
+  /**
+   * Setter passeringstiden for en deltaker ved ett punkt, i etterkant.
+   *
+   * Under løpet stemples tiden til «nå». Etterpå – når man retter mot video
+   * eller legger inn en passering ingen rakk å registrere – må tidspunktet
+   * kunne oppgis direkte. Finnes det en registrering fra før, flyttes den;
+   * ellers opprettes en ny. Andre registreringer på samme punkt merkes som
+   * slettet, slik at rettingen ikke etterlater en konflikt.
+   */
+  async function setTid(
+    bib: string,
+    timingPointId: string,
+    klokkeslett: string,
+  ) {
+    const ts = parseTimeOfDay(klokkeslett, race!.date);
+    if (ts == null) {
+      toast("Ugyldig klokkeslett. Bruk tt:mm:ss");
+      return;
+    }
+    const eksisterende = (registrations ?? []).filter(
+      (r) => !r.deleted && r.bib === bib && r.timingPointId === timingPointId,
+    );
+    const nyeste = eksisterende.sort((a, b) => b.timestamp - a.timestamp)[0];
+    const now = Date.now();
+    if (nyeste) {
+      await db.registrations.update(nyeste.id, { timestamp: ts, updatedAt: now });
+      // Rydd bort eventuelle dubletter, så raden ikke blir stående flagget.
+      for (const r of eksisterende.filter((x) => x.id !== nyeste.id)) {
+        await db.registrations.update(r.id, { deleted: true, updatedAt: now });
+      }
+    } else {
+      await db.registrations.add({
+        id: uid(),
+        raceId,
+        bib,
+        timingPointId,
+        timestamp: ts,
+        stationId: "manuell",
+        deleted: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    setRediger(null);
+    toast(`#${bib}: tid satt til ${formatClock(ts)}`);
+  }
+
+  /** Fjerner passeringen ved punktet helt. */
+  async function fjernTid(bib: string, timingPointId: string) {
+    const treff = (registrations ?? []).filter(
+      (r) => !r.deleted && r.bib === bib && r.timingPointId === timingPointId,
+    );
+    if (!treff.length) return;
+    if (!confirm(`Fjerne passeringen for #${bib}?`)) return;
+    for (const r of treff) {
+      await db.registrations.update(r.id, { deleted: true, updatedAt: Date.now() });
+    }
+    setRediger(null);
+    toast(`#${bib}: passering fjernet`);
   }
 
   async function copyPublicLink() {
@@ -420,40 +489,93 @@ export default function Results() {
                       const s = r.splits.find(
                         (x) => x.timingPoint.id === sp.id,
                       );
+                      const key = `${r.participant.id}:${sp.id}`;
                       return (
                         <td key={sp.id} className="num mono">
-                          {s?.elapsedMs != null ? (
-                            <>
-                              {formatDuration(s.elapsedMs)}
-                              {s.paceSecPerKm != null && (
-                                <div className="tiny muted">
-                                  {formatPace(s.paceSecPerKm * 1000, 1000)}
-                                </div>
+                          {rediger === key ? (
+                            <TidRedigering
+                              startTime={r.startTime}
+                              naavaerende={s?.passedAt}
+                              raceDate={race!.date}
+                              onLagre={(t) => setTid(r.participant.bib, sp.id, t)}
+                              onFjern={() => fjernTid(r.participant.bib, sp.id)}
+                              onAvbryt={() => setRediger(null)}
+                            />
+                          ) : (
+                            <button
+                              className="tid-knapp"
+                              onClick={() => setRediger(key)}
+                              title="Trykk for å rette tiden"
+                            >
+                              {s?.elapsedMs != null ? (
+                                <>
+                                  {formatDuration(s.elapsedMs)}
+                                  {s.paceSecPerKm != null && (
+                                    <div className="tiny muted">
+                                      {formatPace(s.paceSecPerKm * 1000, 1000)}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="muted">–</span>
                               )}
-                            </>
-                          ) : "–"}
+                            </button>
+                          )}
                         </td>
                       );
                     })}
                     <td className="num mono">
-                      {r.finishElapsedMs != null ? (
-                        <>
-                          {formatDuration(r.finishElapsedMs)}
-                          {r.finishPaceSecPerKm != null && (
-                            <div className="tiny muted">
-                              {formatPace(r.finishPaceSecPerKm * 1000, 1000)}
-                            </div>
-                          )}
-                        </>
-                      ) : r.status === "started" ? (
-                        <span className="muted">startet</span>
-                      ) : r.finishAt != null ? (
-                        <span className="muted">
-                          {formatClock(r.finishAt)} (ingen start)
-                        </span>
-                      ) : (
-                        <span className="muted">–</span>
-                      )}
+                      {(() => {
+                        const målTp = (timingPoints ?? []).find(
+                          (t) =>
+                            t.kind === "finish" &&
+                            t.distanceId === r.participant.distanceId,
+                        );
+                        if (!målTp) return <span className="muted">–</span>;
+                        const key = `${r.participant.id}:${målTp.id}`;
+                        if (rediger === key) {
+                          return (
+                            <TidRedigering
+                              startTime={r.startTime}
+                              naavaerende={r.finishAt}
+                              raceDate={race!.date}
+                              onLagre={(t) =>
+                                setTid(r.participant.bib, målTp.id, t)
+                              }
+                              onFjern={() =>
+                                fjernTid(r.participant.bib, målTp.id)
+                              }
+                              onAvbryt={() => setRediger(null)}
+                            />
+                          );
+                        }
+                        return (
+                          <button
+                            className="tid-knapp"
+                            onClick={() => setRediger(key)}
+                            title="Trykk for å rette eller legge inn tiden"
+                          >
+                            {r.finishElapsedMs != null ? (
+                              <>
+                                {formatDuration(r.finishElapsedMs)}
+                                {r.finishPaceSecPerKm != null && (
+                                  <div className="tiny muted">
+                                    {formatPace(r.finishPaceSecPerKm * 1000, 1000)}
+                                  </div>
+                                )}
+                              </>
+                            ) : r.status === "started" ? (
+                              <span className="muted">underveis</span>
+                            ) : r.finishAt != null ? (
+                              <span className="muted">
+                                {formatClock(r.finishAt)} (ingen start)
+                              </span>
+                            ) : (
+                              <span className="muted">–</span>
+                            )}
+                          </button>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );
@@ -463,6 +585,81 @@ export default function Results() {
         </div>
       )}
     </Screen>
+  );
+}
+
+/**
+ * Redigering av én passeringstid. Man skriver klokkeslettet slik det står på
+ * videoen eller stoppeklokka, og ser løpstiden det gir før man lagrer.
+ */
+function TidRedigering({
+  startTime,
+  naavaerende,
+  raceDate,
+  onLagre,
+  onFjern,
+  onAvbryt,
+}: {
+  startTime?: number;
+  naavaerende?: number;
+  raceDate: string;
+  onLagre: (klokkeslett: string) => void;
+  onFjern: () => void;
+  onAvbryt: () => void;
+}) {
+  const [tekst, setTekst] = useState(
+    naavaerende != null ? formatClockTenths(naavaerende) : "",
+  );
+  const tolket = parseTimeOfDay(tekst, raceDate);
+  const medgatt =
+    tolket != null && startTime != null ? tolket - startTime : undefined;
+
+  return (
+    <div className="tid-rediger">
+      <input
+        autoFocus
+        className="mono"
+        value={tekst}
+        placeholder="tt:mm:ss"
+        onChange={(e) => setTekst(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onLagre(tekst);
+          if (e.key === "Escape") onAvbryt();
+        }}
+      />
+      <div className="tiny" style={{ minHeight: "1.4em" }}>
+        {tekst.trim() === "" ? (
+          <span className="muted">klokkeslett ved passering</span>
+        ) : tolket == null ? (
+          <span style={{ color: "var(--danger)" }}>ugyldig</span>
+        ) : medgatt == null ? (
+          <span className="muted">ingen starttid</span>
+        ) : medgatt < 0 ? (
+          <span style={{ color: "var(--danger)" }}>før start</span>
+        ) : (
+          <span style={{ color: "var(--success)" }}>
+            → {formatDuration(medgatt)}
+          </span>
+        )}
+      </div>
+      <div className="row" style={{ gap: 4 }}>
+        <button
+          className="success small"
+          onClick={() => onLagre(tekst)}
+          disabled={tolket == null}
+        >
+          Lagre
+        </button>
+        <button className="ghost small" onClick={onAvbryt}>
+          Avbryt
+        </button>
+        {naavaerende != null && (
+          <button className="ghost small" onClick={onFjern}>
+            Fjern
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

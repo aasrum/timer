@@ -233,6 +233,42 @@ button:disabled {
   padding: 32px 16px;
 }
 
+/* Tidscelle i resultatlista: ser ut som tekst, men er trykkbar for å rette. */
+.tid-knapp {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-height: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.tid-knapp:hover {
+  background: var(--surface-2);
+  outline: 1px solid var(--border);
+}
+
+.tid-rediger {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+  min-width: 150px;
+  text-align: left;
+}
+
+.tid-rediger input {
+  width: 100%;
+  font-size: 16px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
 /* «Ta tid»: skal treffes uten å se ned, ved tett målgang. */
 .take-time {
   width: 100%;
