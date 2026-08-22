@@ -334,6 +334,13 @@ button:disabled {
   }
 }
 
+/* DNS/DNF i tidskolonnen: tydelig at det ikke er en tid. */
+.utfall {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
 /* Tidscelle i resultatlista: ser ut som tekst, men er trykkbar for å rette. */
 .tid-knapp {
   background: none;

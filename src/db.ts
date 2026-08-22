@@ -70,6 +70,12 @@ export interface Participant {
   nationality?: string;
   /** Aldersklasse / kategori, f.eks. "M40", "K20-29". */
   category?: string;
+  /**
+   * Manuelt satt utfall som overstyrer det tidene viser: «dns» for de som
+   * ikke startet, «dnf» for de som brøt. Udefinert betyr at resultatet
+   * regnes ut fra registreringene som vanlig.
+   */
+  outcome?: "dns" | "dnf";
   /** Intervallstart: individuell starttid (epoch ms). */
   startTime?: number;
   updatedAt: number;

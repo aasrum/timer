@@ -64,7 +64,7 @@ export interface ParticipantResult {
   finishDistanceM?: number;
   finishPaceSecPerKm?: number;
   splits: SplitResult[];
-  status: "finished" | "started" | "no-start";
+  status: "finished" | "started" | "no-start" | "dns" | "dnf";
   /**
    * Punkter der samme startnummer er registrert flere ganger med stor
    * avstand i tid. To enheter som fanger samme passering ligger sekunder
@@ -145,12 +145,18 @@ export function computeResult(
       ? finishElapsedMs / finishDistanceM
       : undefined;
 
+  // Et manuelt satt utfall er arrangørens beslutning og veier tyngre enn
+  // det registreringene viser – en løper som brøt kan godt ha en mellomtid.
   const status: ParticipantResult["status"] =
-    finishAt != null
-      ? "finished"
-      : start != null && start <= now
-        ? "started"
-        : "no-start";
+    participant.outcome === "dns"
+      ? "dns"
+      : participant.outcome === "dnf"
+        ? "dnf"
+        : finishAt != null
+          ? "finished"
+          : start != null && start <= now
+            ? "started"
+            : "no-start";
 
   return {
     participant,
@@ -166,11 +172,17 @@ export function computeResult(
   };
 }
 
-/** Sorterer resultater: fullførte (på tid) først, så øvrige på startnr. */
+/**
+ * Sorterer resultater: fullførte (på tid) først, så øvrige på startnr.
+ * DNS og DNF regnes aldri som fullført, selv om de skulle ha en registrert
+ * tid – arrangøren har bestemt at de ikke har et resultat.
+ */
 export function sortResults(results: ParticipantResult[]): ParticipantResult[] {
+  const tid = (r: ParticipantResult) =>
+    r.status === "finished" ? r.finishElapsedMs : undefined;
   return [...results].sort((a, b) => {
-    const af = a.finishElapsedMs;
-    const bf = b.finishElapsedMs;
+    const af = tid(a);
+    const bf = tid(b);
     if (af != null && bf != null) return af - bf;
     if (af != null) return -1;
     if (bf != null) return 1;
@@ -212,6 +224,9 @@ export function computeExpectedAt(
   for (const participant of participants) {
     if (participant.distanceId !== targetTP.distanceId) continue;
     if (getLatest(participant.bib, targetTP.id)) continue;
+    // Den som ikke startet eller har brutt kommer ikke – stasjonen skal ikke
+    // stå og vente på dem.
+    if (participant.outcome) continue;
 
     const distance = distanceMap.get(participant.distanceId);
     const startTime = startTimeFor(participant, distance);

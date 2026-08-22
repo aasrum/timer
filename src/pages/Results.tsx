@@ -175,8 +175,12 @@ export default function Results() {
             ? formatPace(s.paceSecPerKm * 1000, 1000)
             : "";
         }),
-        r.finishElapsedMs != null ? formatDuration(r.finishElapsedMs) : "",
-        r.finishPaceSecPerKm != null
+        r.status === "dns" || r.status === "dnf"
+          ? r.status.toUpperCase()
+          : r.finishElapsedMs != null
+            ? formatDuration(r.finishElapsedMs)
+            : "",
+        r.status === "finished" && r.finishPaceSecPerKm != null
           ? formatPace(r.finishPaceSecPerKm * 1000, 1000)
           : "",
       ];
@@ -217,6 +221,15 @@ export default function Results() {
         r.participant.category ?? "",
         startClock,
       ];
+
+      // DNS/DNF får én rad uten tid – ExitStatus-kolonnen bærer utfallet.
+      if (r.status === "dns" || r.status === "dnf") {
+        lines.push(
+          [...baseRow, "Mål", "", r.status.toUpperCase(), ""]
+            .map(csvCell).join(";"),
+        );
+        continue;
+      }
 
       // Én rad per mellomtid
       for (const s of r.splits) {
@@ -307,6 +320,25 @@ export default function Results() {
     }
     setRediger(null);
     toast(`#${bib}: passering fjernet`);
+  }
+
+  /** Setter eller fjerner DNS/DNF på en deltaker. */
+  async function settUtfall(
+    participantId: string,
+    outcome: "dns" | "dnf" | undefined,
+  ) {
+    await db.participants.update(participantId, {
+      outcome,
+      updatedAt: Date.now(),
+    });
+    setRediger(null);
+    toast(
+      outcome === "dns"
+        ? "Ført som DNS – startet ikke"
+        : outcome === "dnf"
+          ? "Ført som DNF – brøt"
+          : "DNS/DNF fjernet",
+    );
   }
 
   async function copyPublicLink() {
@@ -593,6 +625,7 @@ export default function Results() {
                               startTime={r.startTime}
                               naavaerende={r.finishAt}
                               raceDate={race!.date}
+                              utfall={{ naa: r.participant.outcome }}
                               onLagre={(t) =>
                                 setTid(r.participant.bib, målTp.id, t)
                               }
@@ -600,6 +633,7 @@ export default function Results() {
                                 fjernTid(r.participant.bib, målTp.id)
                               }
                               onAvbryt={() => setRediger(null)}
+                              onUtfall={(v) => settUtfall(r.participant.id, v)}
                             />
                           );
                         }
@@ -609,7 +643,11 @@ export default function Results() {
                             onClick={() => setRediger(key)}
                             title="Trykk for å rette eller legge inn tiden"
                           >
-                            {r.finishElapsedMs != null ? (
+                            {r.status === "dns" || r.status === "dnf" ? (
+                              <span className="utfall">
+                                {r.status.toUpperCase()}
+                              </span>
+                            ) : r.finishElapsedMs != null ? (
                               <>
                                 {formatDuration(r.finishElapsedMs)}
                                 {r.finishPaceSecPerKm != null && (
@@ -650,16 +688,21 @@ function TidRedigering({
   startTime,
   naavaerende,
   raceDate,
+  utfall,
   onLagre,
   onFjern,
   onAvbryt,
+  onUtfall,
 }: {
   startTime?: number;
   naavaerende?: number;
   raceDate: string;
+  /** Kun satt på målcellen – DNS/DNF gjelder deltakeren, ikke ett punkt. */
+  utfall?: { naa: "dns" | "dnf" | undefined };
   onLagre: (klokkeslett: string) => void;
   onFjern: () => void;
   onAvbryt: () => void;
+  onUtfall?: (v: "dns" | "dnf" | undefined) => void;
 }) {
   const [tekst, setTekst] = useState(
     naavaerende != null ? formatClockTenths(naavaerende) : "",
@@ -713,6 +756,35 @@ function TidRedigering({
           </button>
         )}
       </div>
+      {utfall && onUtfall && (
+        <div className="row" style={{ gap: 4, marginTop: 2 }}>
+          {utfall.naa ? (
+            <button
+              className="ghost small grow"
+              onClick={() => onUtfall(undefined)}
+            >
+              Fjern {utfall.naa.toUpperCase()}
+            </button>
+          ) : (
+            <>
+              <button
+                className="ghost small grow"
+                onClick={() => onUtfall("dns")}
+                title="Startet ikke"
+              >
+                DNS
+              </button>
+              <button
+                className="ghost small grow"
+                onClick={() => onUtfall("dnf")}
+                title="Brøt underveis"
+              >
+                DNF
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

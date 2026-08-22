@@ -174,7 +174,11 @@ export default function PublicResults() {
                           );
                         })}
                         <td className="num mono">
-                          {r.finishElapsedMs != null ? (
+                          {r.status === "dns" || r.status === "dnf" ? (
+                            <span className="utfall">
+                              {r.status.toUpperCase()}
+                            </span>
+                          ) : r.finishElapsedMs != null ? (
                             formatDuration(r.finishElapsedMs)
                           ) : r.status === "started" ? (
                             <span className="muted">underveis</span>
