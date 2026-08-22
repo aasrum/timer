@@ -58,10 +58,11 @@ export default function Participants() {
     (p) => filter === "all" || p.distanceId === filter,
   );
 
-  // Rader som er lagt til nå holdes nederst, ved knappen de ble opprettet
-  // med, i stedet for å sortere seg inn mens man skriver. Et tomt
-  // startnummer teller som 0 og ville ellers sendt raden til toppen, for så
-  // å flytte den ned igjen straks det første sifferet er tastet.
+  // Rader som er lagt til nå holdes øverst i stedet for å sortere seg inn
+  // mens man skriver. Et tomt startnummer teller som 0 og ville ellers ligget
+  // nederst i den synkende lista, for så å hoppe opp straks første siffer er
+  // tastet. Rekkefølgen de ble lagt til i beholdes, så ingenting flytter seg
+  // når man legger til flere.
   const nySet = new Set(nyeIder);
   // Synkende: høyeste startnummer først. Etteranmeldte får som regel de
   // høyeste numrene, og havner dermed øverst der man leter etter dem.
@@ -71,7 +72,7 @@ export default function Participants() {
   const nye = nyeIder
     .map((id) => synlige.find((p) => p.id === id))
     .filter((p): p is Participant => p != null);
-  const shown = [...sorterte, ...nye];
+  const shown = [...nye, ...sorterte];
 
   async function update(id: string, patch: Partial<Participant>) {
     await db.participants.update(id, { ...patch, updatedAt: Date.now() });
@@ -178,6 +179,15 @@ export default function Participants() {
           </button>
         ))}
       </div>
+
+      {/* Står rett over listen, siden nye rader legger seg øverst. */}
+      <button
+        className="primary"
+        style={{ width: "100%", marginBottom: 12 }}
+        onClick={addParticipant}
+      >
+        + Legg til deltaker
+      </button>
 
       {shown.length === 0 && (
         <div className="empty">
@@ -290,14 +300,6 @@ export default function Participants() {
           </div>
         );
       })}
-
-      <button
-        className="primary"
-        style={{ width: "100%" }}
-        onClick={addParticipant}
-      >
-        + Legg til deltaker
-      </button>
 
       <button
         className="ghost"
