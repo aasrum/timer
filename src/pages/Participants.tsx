@@ -61,15 +61,16 @@ export default function Participants() {
   // Rader som er lagt til nå holdes øverst i stedet for å sortere seg inn
   // mens man skriver. Et tomt startnummer teller som 0 og ville ellers ligget
   // nederst i den synkende lista, for så å hoppe opp straks første siffer er
-  // tastet. Rekkefølgen de ble lagt til i beholdes, så ingenting flytter seg
-  // når man legger til flere.
+  // tastet. Nyeste ligger først, rett under knappen som lagde den, så man
+  // slipper å lete nedover etter feltet når man legger inn flere på rad.
   const nySet = new Set(nyeIder);
   // Synkende: høyeste startnummer først. Etteranmeldte får som regel de
   // høyeste numrene, og havner dermed øverst der man leter etter dem.
   const sorterte = synlige
     .filter((p) => !nySet.has(p.id))
     .sort((a, b) => Number(b.bib) - Number(a.bib) || b.bib.localeCompare(a.bib));
-  const nye = nyeIder
+  const nye = [...nyeIder]
+    .reverse()
     .map((id) => synlige.find((p) => p.id === id))
     .filter((p): p is Participant => p != null);
   const shown = [...nye, ...sorterte];
