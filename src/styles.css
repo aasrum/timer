@@ -233,6 +233,107 @@ button:disabled {
   padding: 32px 16px;
 }
 
+/* ── Utskrift av resultatlista ────────────────────────────────────────────
+   Skjermen er mørk og full av verktøy; papiret skal bare ha tabellen med en
+   overskrift som sier hvilket utvalg det gjelder. */
+.kun-utskrift {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 10.5pt;
+  }
+  .app {
+    max-width: none;
+    padding: 0;
+  }
+  /* Alt annet enn tabellen og utskriftsoverskriften bort. */
+  header.topbar,
+  .tabs,
+  .fab-row,
+  .card:not(.resultat-tabell),
+  .empty,
+  button {
+    display: none !important;
+  }
+  .kun-utskrift {
+    display: block;
+  }
+  .utskrift-topp {
+    margin-bottom: 6mm;
+    border-bottom: 1.5pt solid #000;
+    padding-bottom: 3mm;
+  }
+  .utskrift-topp h1 {
+    margin: 0 0 1mm;
+    font-size: 18pt;
+    color: #000;
+  }
+  .utskrift-linje {
+    font-size: 10pt;
+    color: #333;
+  }
+  .utskrift-linje.tiny {
+    font-size: 8.5pt;
+    color: #666;
+    margin-top: 1mm;
+  }
+
+  .card.resultat-tabell {
+    display: block !important;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    overflow: visible !important;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+  thead {
+    display: table-header-group; /* gjentas øverst på hver side */
+  }
+  tr {
+    break-inside: avoid;
+  }
+  th {
+    background: none !important;
+    color: #000 !important;
+    border-bottom: 1pt solid #000;
+    text-align: left;
+    padding: 1.5mm 2mm;
+  }
+  td {
+    border-bottom: 0.25pt solid #bbb;
+    padding: 1.5mm 2mm;
+    color: #000;
+  }
+  td .tiny,
+  td .muted {
+    color: #555 !important;
+  }
+  .num {
+    text-align: right;
+  }
+  /* Tidscellene er knapper på skjermen – på papir er de bare tekst. */
+  .tid-knapp {
+    display: inline !important;
+    background: none !important;
+    outline: none !important;
+    color: #000 !important;
+    padding: 0;
+    margin: 0;
+  }
+}
+
 /* Tidscelle i resultatlista: ser ut som tekst, men er trykkbar for å rette. */
 .tid-knapp {
   background: none;

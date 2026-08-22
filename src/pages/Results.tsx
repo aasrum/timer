@@ -51,6 +51,9 @@ export default function Results() {
   const [categoryFilter, setCategoryFilter] = useState("");
   // «deltakerId:tidspunktId» for cellen som redigeres, eller null.
   const [rediger, setRediger] = useState<string | null>(null);
+  // Mellomtidskolonner på/av. På, så enkeltdistanse ser ut som før; av gir
+  // en ren liste med bare sluttider, som er det man vil ha på papir.
+  const [visSplits, setVisSplits] = useState(true);
 
   const dMap = useMemo(
     () => new Map((distances ?? []).map((d) => [d.id, d])),
@@ -103,12 +106,33 @@ export default function Results() {
     return { ukjente: [...ukjenteBibs].sort(), utenNummer };
   }, [registrations, participants]);
 
+  /**
+   * Mellomtidskolonner. På tvers av distanser tas distansenavnet med i
+   * overskriften, siden to distanser gjerne har hvert sitt punkt som begge
+   * heter «5 km». Celler for løpere på en annen distanse står tomme.
+   */
   const splitPoints = useMemo(() => {
-    if (distanceFilter === "all") return [];
-    return (timingPoints ?? [])
-      .filter((tp) => tp.distanceId === distanceFilter && tp.kind === "split")
-      .sort((a, b) => a.order - b.order);
-  }, [timingPoints, distanceFilter]);
+    if (!visSplits) return [];
+    const aktuelle = (timingPoints ?? []).filter(
+      (tp) =>
+        tp.kind === "split" &&
+        (distanceFilter === "all" || tp.distanceId === distanceFilter),
+    );
+    const flereDistanser =
+      distanceFilter === "all" && new Set(aktuelle.map((t) => t.distanceId)).size > 1;
+    return aktuelle
+      .sort(
+        (a, b) =>
+          (dMap.get(a.distanceId)?.order ?? 0) - (dMap.get(b.distanceId)?.order ?? 0) ||
+          a.order - b.order,
+      )
+      .map((tp) => ({
+        ...tp,
+        label: flereDistanser
+          ? `${dMap.get(tp.distanceId)?.name ?? ""} ${tp.name}`.trim()
+          : tp.name,
+      }));
+  }, [timingPoints, distanceFilter, visSplits, dMap]);
 
   if (!race)
     return <Screen title="Laster…" back={`/race/${raceId}`}>{null}</Screen>;
@@ -124,8 +148,8 @@ export default function Results() {
       ...(showCategory ? ["Aldersklasse"] : []),
       "Klubb",
       "Distanse",
-      ...splitPoints.map((s) => s.name),
-      ...splitPoints.map((s) => `${s.name} pace`),
+      ...splitPoints.map((s) => s.label),
+      ...splitPoints.map((s) => `${s.label} pace`),
       "Tid",
       "Pace",
     ];
@@ -410,6 +434,15 @@ export default function Results() {
       )}
 
       <div className="fab-row">
+        <button
+          className={visSplits ? "" : "ghost"}
+          onClick={() => setVisSplits((v) => !v)}
+        >
+          {visSplits ? "⊟ Skjul mellomtider" : "⊞ Vis mellomtider"}
+        </button>
+        <button className="ghost" onClick={() => window.print()}>
+          🖨 Skriv ut
+        </button>
         <button className="ghost" onClick={exportCsv}>
           Eksporter CSV
         </button>
@@ -431,10 +464,31 @@ export default function Results() {
         </div>
       </div>
 
+      {/* Bare synlig på papir: forteller hvilket utvalg arket viser. */}
+      <div className="kun-utskrift utskrift-topp">
+        <h1>{race.name}</h1>
+        <div className="utskrift-linje">
+          {[
+            race.date,
+            distanceFilter === "all"
+              ? "Alle distanser"
+              : dMap.get(distanceFilter)?.name,
+            genderFilter === "M" ? "Menn" : genderFilter === "K" ? "Kvinner" : null,
+            categoryFilter || null,
+            `${sorted.filter((r) => r.status === "finished").length} fullførte`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+        <div className="utskrift-linje tiny">
+          Skrevet ut {new Date().toLocaleString("no-NO")}
+        </div>
+      </div>
+
       {sorted.length === 0 && <div className="empty">Ingen resultater ennå.</div>}
 
       {sorted.length > 0 && (
-        <div className="card" style={{ overflowX: "auto" }}>
+        <div className="card resultat-tabell" style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -445,7 +499,7 @@ export default function Results() {
                 {showCategoryCol && <th>Klasse</th>}
                 {splitPoints.map((s) => (
                   <th key={s.id} className="num">
-                    {s.name}
+                    {s.label}
                   </th>
                 ))}
                 <th className="num">Tid</th>
