@@ -9,7 +9,7 @@ import {
 } from "../db";
 import { useLiveSync } from "../liveSync";
 import { clockInputValue, parseTimeOfDay } from "../time";
-import { Screen, SyncBadge, useToast } from "../ui";
+import { PersistedInput, Screen, SyncBadge, useToast } from "../ui";
 
 export default function RaceSetup() {
   const { raceId = "" } = useParams();
@@ -112,9 +112,9 @@ export default function RaceSetup() {
       <div className="card">
         <div className="field">
           <label>Navn på løp</label>
-          <input
+          <PersistedInput
             value={race.name}
-            onChange={(e) => updateRace({ name: e.target.value })}
+            onValueChange={(v) => updateRace({ name: v })}
           />
         </div>
         <div className="field">
@@ -138,23 +138,21 @@ export default function RaceSetup() {
           <div key={d.id} className="card">
             <div className="field">
               <label>Distansenavn</label>
-              <input
+              <PersistedInput
                 value={d.name}
-                onChange={(e) => updateDistance(d.id, { name: e.target.value })}
+                onValueChange={(v) => updateDistance(d.id, { name: v })}
               />
             </div>
             <div className="row" style={{ gap: 8 }}>
               <div className="field grow">
                 <label>Lengde (m)</label>
-                <input
+                <PersistedInput
                   type="number"
                   inputMode="numeric"
-                  value={d.lengthMeters ?? ""}
-                  onChange={(e) =>
+                  value={d.lengthMeters != null ? String(d.lengthMeters) : ""}
+                  onValueChange={(v) =>
                     updateDistance(d.id, {
-                      lengthMeters: e.target.value
-                        ? Number(e.target.value)
-                        : undefined,
+                      lengthMeters: v ? Number(v) : undefined,
                     })
                   }
                 />
@@ -204,23 +202,21 @@ export default function RaceSetup() {
             {splits.map((tp) => (
               <div key={tp.id} style={{ marginBottom: 8 }}>
                 <div className="row" style={{ gap: 6 }}>
-                  <input
+                  <PersistedInput
                     className="grow"
                     value={tp.name}
-                    onChange={(e) => updateTP(tp.id, { name: e.target.value })}
+                    onValueChange={(v) => updateTP(tp.id, { name: v })}
                     placeholder="Navn"
                   />
-                  <input
+                  <PersistedInput
                     type="number"
                     inputMode="numeric"
                     style={{ width: 100 }}
-                    value={tp.distanceMeters ?? ""}
+                    value={tp.distanceMeters != null ? String(tp.distanceMeters) : ""}
                     placeholder="m fra start"
-                    onChange={(e) =>
+                    onValueChange={(v) =>
                       updateTP(tp.id, {
-                        distanceMeters: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
+                        distanceMeters: v ? Number(v) : undefined,
                       })
                     }
                   />

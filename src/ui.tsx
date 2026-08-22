@@ -106,6 +106,59 @@ export function SyncBadge({
   );
 }
 
+// ── Tekstfelt som lagres asynkront ────────────────────────────────────────────
+
+/**
+ * Inndatafelt for verdier som ligger i databasen.
+ *
+ * Et vanlig kontrollert felt (`value={p.bib}`) får verdien tilbake via en
+ * asynkron lagring. Mellom tastetrykket og svaret rendres feltet med den
+ * gamle verdien, og markøren havner i starten – taster man «23» blir det
+ * «32». Her eies teksten lokalt mens feltet har fokus, så markøren ligger i
+ * fred; databasen skrives fortsatt ved hvert tastetrykk. Utenfor fokus følger
+ * feltet databasen, slik at endringer fra andre enheter fortsatt vises.
+ */
+export function PersistedInput({
+  value,
+  onValueChange,
+  inputRef,
+  ...rest
+}: Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange"
+> & {
+  value: string;
+  onValueChange: (v: string) => void;
+  inputRef?: (el: HTMLInputElement | null) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  const focused = useRef(false);
+
+  useEffect(() => {
+    if (!focused.current) setLocal(value);
+  }, [value]);
+
+  return (
+    <input
+      {...rest}
+      ref={inputRef}
+      value={local}
+      onFocus={(e) => {
+        focused.current = true;
+        rest.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        focused.current = false;
+        rest.onBlur?.(e);
+      }}
+      onChange={(e) => {
+        setLocal(e.target.value);
+        onValueChange(e.target.value);
+      }}
+    />
+  );
+}
+
 // ── Hold skjermen tent ────────────────────────────────────────────────────────
 
 /**

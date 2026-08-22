@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { db, uid, type Participant } from "../db";
 import { useLiveSync } from "../liveSync";
 import { clockInputValue, parseTimeOfDay } from "../time";
-import { Screen, SyncBadge, useToast } from "../ui";
+import { PersistedInput, Screen, SyncBadge, useToast } from "../ui";
 
 export default function Participants() {
   const { raceId = "" } = useParams();
@@ -63,9 +63,11 @@ export default function Participants() {
   // startnummer teller som 0 og ville ellers sendt raden til toppen, for så
   // å flytte den ned igjen straks det første sifferet er tastet.
   const nySet = new Set(nyeIder);
+  // Synkende: høyeste startnummer først. Etteranmeldte får som regel de
+  // høyeste numrene, og havner dermed øverst der man leter etter dem.
   const sorterte = synlige
     .filter((p) => !nySet.has(p.id))
-    .sort((a, b) => Number(a.bib) - Number(b.bib) || a.bib.localeCompare(b.bib));
+    .sort((a, b) => Number(b.bib) - Number(a.bib) || b.bib.localeCompare(a.bib));
   const nye = nyeIder
     .map((id) => synlige.find((p) => p.id === id))
     .filter((p): p is Participant => p != null);
@@ -191,12 +193,12 @@ export default function Participants() {
             <div className="row" style={{ gap: 8 }}>
               <div className="field" style={{ width: 90 }}>
                 <label>Nr</label>
-                <input
+                <PersistedInput
                   className="mono"
                   inputMode="numeric"
                   value={p.bib}
-                  onChange={(e) => update(p.id, { bib: e.target.value })}
-                  ref={(el) => {
+                  onValueChange={(v) => update(p.id, { bib: v })}
+                  inputRef={(el) => {
                     // Nyopprettet rad: hopp hit og gjør feltet klart å taste i.
                     if (el && fokusId.current === p.id) {
                       fokusId.current = null;
@@ -208,9 +210,9 @@ export default function Participants() {
               </div>
               <div className="field grow">
                 <label>Navn</label>
-                <input
+                <PersistedInput
                   value={p.name}
-                  onChange={(e) => update(p.id, { name: e.target.value })}
+                  onValueChange={(v) => update(p.id, { name: v })}
                 />
               </div>
             </div>
@@ -263,21 +265,19 @@ export default function Participants() {
               </div>
               <div className="field grow">
                 <label>Aldersklasse</label>
-                <input
+                <PersistedInput
                   value={p.category ?? ""}
                   placeholder="f.eks. M40"
-                  onChange={(e) =>
-                    update(p.id, { category: e.target.value || undefined })
+                  onValueChange={(v) =>
+                    update(p.id, { category: v || undefined })
                   }
                 />
               </div>
               <div className="field grow">
                 <label>Klubb</label>
-                <input
+                <PersistedInput
                   value={p.club ?? ""}
-                  onChange={(e) =>
-                    update(p.id, { club: e.target.value || undefined })
-                  }
+                  onValueChange={(v) => update(p.id, { club: v || undefined })}
                 />
               </div>
             </div>
