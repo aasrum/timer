@@ -52,6 +52,23 @@ export function parseTimeOfDay(input: string, baseDate: string): number | null {
   return dt.getTime();
 }
 
+/**
+ * Tolker en varighet: «mm:ss», «h:mm:ss», begge med valgfrie tideler.
+ * Brukt når noen oppgir løpstiden fra en stoppeklokke i stedet for
+ * klokkeslettet ved passering. Returnerer ms eller null.
+ */
+export function parseDuration(input: string): number | null {
+  const s = input.trim();
+  if (!s) return null;
+  const m = s.match(/^(?:(\d{1,3}):)?(\d{1,2}):(\d{2})(?:[.,](\d{1,3}))?$/);
+  if (!m) return null;
+  const [, hh, mm, ss, frac] = m;
+  const ms = frac ? Number((frac + "000").slice(0, 3)) : 0;
+  return (
+    (Number(hh ?? 0) * 3600 + Number(mm) * 60 + Number(ss)) * 1000 + ms
+  );
+}
+
 /** Pace som mm:ss/km fra varighet og distanse i meter. */
 export function formatPace(elapsedMs: number, distanceM: number): string {
   if (distanceM <= 0) return "–";

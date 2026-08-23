@@ -190,6 +190,69 @@ export function sortResults(results: ParticipantResult[]): ParticipantResult[] {
   });
 }
 
+/**
+ * Lengste løpstid vi regner som mulig. Alt under 0 eller over dette er en
+ * feilført tid – som regel en løpstid tastet inn der klokkeslettet skulle
+ * stått («2:24:29» blir da natt til løpsdagen).
+ */
+export const MAX_ELAPSED_MS = 12 * 60 * 60 * 1000;
+
+export interface ImpossibleTime {
+  bib: string;
+  participant?: Participant;
+  timingPoint: TimingPoint;
+  /** Klokkeslettet slik det er lagret. */
+  at: number;
+  /** Tiden fra start – negativ når passeringen ligger før start. */
+  elapsedMs: number;
+  reason: "before-start" | "too-late";
+}
+
+/**
+ * Finner passeringer som ikke kan stemme, målt mot starttiden.
+ *
+ * Slike tider ser rimelige ut i tabellen (en negativ tid er lett å overse
+ * blant hundre rader), men EQ Timing avviser hele importen med «tid ... er
+ * utenfor arrangementets tidsintervall». Derfor må de fanges før eksport.
+ */
+export function findImpossibleTimes(
+  participants: Participant[],
+  distanceMap: Map<string, Distance>,
+  timingPoints: TimingPoint[],
+  registrations: Registration[],
+): ImpossibleTime[] {
+  const tpMap = new Map(timingPoints.map((t) => [t.id, t]));
+  const byBib = new Map(participants.map((p) => [p.bib, p]));
+  const funn: ImpossibleTime[] = [];
+
+  for (const r of registrations) {
+    if (r.deleted || !r.bib) continue;
+    const tp = tpMap.get(r.timingPointId);
+    if (!tp) continue;
+    const participant = byBib.get(r.bib);
+    // Uten deltaker faller vi tilbake på fellesstarten der punktet hører til,
+    // slik at også løse tider på ukjente numre blir kontrollert.
+    const start = participant
+      ? startTimeFor(participant, distanceMap.get(participant.distanceId))
+      : distanceMap.get(tp.distanceId)?.massStartTime;
+    if (start == null) continue;
+    const elapsedMs = r.timestamp - start;
+    if (elapsedMs >= 0 && elapsedMs <= MAX_ELAPSED_MS) continue;
+    funn.push({
+      bib: r.bib,
+      participant,
+      timingPoint: tp,
+      at: r.timestamp,
+      elapsedMs,
+      reason: elapsedMs < 0 ? "before-start" : "too-late",
+    });
+  }
+
+  return funn.sort(
+    (a, b) => numericBib(a.bib) - numericBib(b.bib) || a.at - b.at,
+  );
+}
+
 export interface ExpectedRunner {
   participant: Participant;
   eta: number | undefined;

@@ -4,7 +4,10 @@ import { useParams } from "react-router-dom";
 import { db, uid } from "../db";
 import {
   computeResult,
+  findImpossibleTimes,
   sortResults,
+  startTimeFor,
+  MAX_ELAPSED_MS,
   type ParticipantResult,
 } from "../results";
 import {
@@ -12,6 +15,7 @@ import {
   formatClockTenths,
   formatDuration,
   formatPace,
+  parseDuration,
   parseTimeOfDay,
 } from "../time";
 import {
@@ -142,6 +146,21 @@ export default function Results() {
   }, [registrations, participants, timingPoints, dMap]);
 
   /**
+   * Passeringer som ikke kan stemme. De ser harmløse ut i tabellen, men en
+   * enkelt slik tid får EQ Timing til å avvise hele importen.
+   */
+  const umuligeTider = useMemo(
+    () =>
+      findImpossibleTimes(
+        participants ?? [],
+        dMap,
+        timingPoints ?? [],
+        registrations ?? [],
+      ),
+    [participants, dMap, timingPoints, registrations],
+  );
+
+  /**
    * Mellomtidskolonner. På tvers av distanser tas distansenavnet med i
    * overskriften, siden to distanser gjerne har hvert sitt punkt som begge
    * heter «5 km». Celler for løpere på en annen distanse står tomme.
@@ -229,6 +248,28 @@ export default function Results() {
   }
 
   function exportEQTiming() {
+    // EQ Timing avviser hele fila om én tid ligger utenfor arrangementets
+    // tidsvindu, og sier bare hvilket startnummer det gjelder. Vis dem her,
+    // der de kan rettes, framfor å la importen feile.
+    if (umuligeTider.length > 0) {
+      const liste = umuligeTider
+        .slice(0, 6)
+        .map(
+          (u) =>
+            `#${u.bib} ${u.timingPoint.name}: ${formatClock(u.at)} (${formatDuration(u.elapsedMs)} fra start)`,
+        )
+        .join("\n");
+      const mer =
+        umuligeTider.length > 6 ? `\n… og ${umuligeTider.length - 6} til` : "";
+      if (
+        !confirm(
+          `${umuligeTider.length} ${umuligeTider.length === 1 ? "tid ligger" : "tider ligger"} utenfor løpet:\n\n${liste}${mer}\n\n` +
+            "EQ Timing avviser importen hvis disse blir med. Rett dem i tabellen først.\n\nEksportere likevel?",
+        )
+      )
+        return;
+    }
+
     // UTF-8 BOM så Excel/EQTiming leser norske tegn riktig.
     const bom = "﻿";
     const header = [
@@ -313,6 +354,20 @@ export default function Results() {
     const ts = parseTimeOfDay(klokkeslett, race!.date);
     if (ts == null) {
       toast("Ugyldig klokkeslett. Bruk tt:mm:ss");
+      return;
+    }
+    // Siste skanse mot løpstider tastet inn som klokkeslett – de blir avvist
+    // av EQ Timing lenge etter at man har glemt hva man skrev.
+    const deltaker = (participants ?? []).find((p) => p.bib === bib);
+    const start = deltaker
+      ? startTimeFor(deltaker, dMap.get(deltaker.distanceId))
+      : undefined;
+    if (start != null && (ts < start || ts - start > MAX_ELAPSED_MS)) {
+      toast(
+        ts < start
+          ? `${formatClock(ts)} er før start (${formatClock(start)})`
+          : `${formatClock(ts)} gir en tid på ${formatDuration(ts - start)}`,
+      );
       return;
     }
     const eksisterende = (registrations ?? []).filter(
@@ -529,6 +584,45 @@ export default function Results() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {umuligeTider.length > 0 && (
+        <div className="card" style={{ borderColor: "var(--danger)" }}>
+          <div style={{ fontWeight: 600 }}>
+            ⚠ {umuligeTider.length}{" "}
+            {umuligeTider.length === 1 ? "tid ligger" : "tider ligger"} utenfor
+            løpet
+          </div>
+          <div className="tiny muted" style={{ marginTop: 4 }}>
+            Passeringen ligger før start eller mer enn tolv timer etter.
+            Vanligste årsak er at løpstiden er tastet inn der klokkeslettet
+            skulle stått. EQ Timing avviser hele importen så lenge disse står
+            slik – trykk på tiden i tabellen for å rette den.
+          </div>
+          <div style={{ marginTop: 8 }}>
+            {umuligeTider.map((u) => (
+              <div
+                className="row spread løs-tid"
+                key={`${u.bib}:${u.timingPoint.id}:${u.at}`}
+              >
+                <div>
+                  <span className="mono" style={{ fontWeight: 700 }}>
+                    #{u.bib}
+                  </span>
+                  <span className="tiny">
+                    {" · "}
+                    {u.participant?.name ?? "ukjent nummer"} ·{" "}
+                    {u.timingPoint.name} kl. {formatClock(u.at)}
+                  </span>
+                </div>
+                <span className="tiny mono" style={{ color: "var(--danger)" }}>
+                  {formatDuration(u.elapsedMs)}
+                  {u.reason === "before-start" ? " (før start)" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -791,6 +885,16 @@ function TidRedigering({
   const tolket = parseTimeOfDay(tekst, raceDate);
   const medgatt =
     tolket != null && startTime != null ? tolket - startTime : undefined;
+  const umulig =
+    medgatt != null && (medgatt < 0 || medgatt > MAX_ELAPSED_MS);
+
+  // Den samme teksten lest som løpstid. «2:24:29» fra en stoppeklokke gir
+  // ellers klokka 02:24:29 natt til løpsdagen – en tid EQ Timing avviser.
+  const somLøpstid = parseDuration(tekst);
+  const somKlokke =
+    umulig && somLøpstid != null && startTime != null
+      ? startTime + somLøpstid
+      : undefined;
 
   return (
     <div className="tid-rediger">
@@ -801,7 +905,7 @@ function TidRedigering({
         placeholder="tt:mm:ss"
         onChange={(e) => setTekst(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") onLagre(tekst);
+          if (e.key === "Enter" && tolket != null && !umulig) onLagre(tekst);
           if (e.key === "Escape") onAvbryt();
         }}
       />
@@ -813,18 +917,35 @@ function TidRedigering({
         ) : medgatt == null ? (
           <span className="muted">ingen starttid</span>
         ) : medgatt < 0 ? (
-          <span style={{ color: "var(--danger)" }}>før start</span>
+          <span style={{ color: "var(--danger)" }}>
+            før start{startTime != null && ` (kl. ${formatClock(startTime)})`}
+          </span>
+        ) : umulig ? (
+          <span style={{ color: "var(--danger)" }}>
+            {formatDuration(medgatt)} etter start
+          </span>
         ) : (
           <span style={{ color: "var(--success)" }}>
             → {formatDuration(medgatt)}
           </span>
         )}
       </div>
+      {somKlokke != null && (
+        <button
+          className="ghost small"
+          style={{ marginBottom: 4 }}
+          onClick={() => onLagre(formatClockTenths(somKlokke))}
+          title="Tolk tallet som løpstid fra start i stedet for klokkeslett"
+        >
+          Er dette løpstiden? → kl. {formatClock(somKlokke)}
+        </button>
+      )}
       <div className="row" style={{ gap: 4 }}>
         <button
           className="success small"
           onClick={() => onLagre(tekst)}
-          disabled={tolket == null}
+          disabled={tolket == null || umulig}
+          title={umulig ? "Tiden ligger utenfor løpet" : undefined}
         >
           Lagre
         </button>
