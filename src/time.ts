@@ -53,6 +53,15 @@ export function parseTimeOfDay(input: string, baseDate: string): number | null {
 }
 
 /**
+ * Varighet som tt:mm:ss med tosifret time – formatet EQ Timing venter i
+ * tidskolonnene sine. Rundes til nærmeste sekund.
+ */
+export function formatHms(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor(total / 60) % 60)}:${pad(total % 60)}`;
+}
+
+/**
  * Tolker en varighet: «mm:ss», «h:mm:ss», begge med valgfrie tideler.
  * Brukt når noen oppgir løpstiden fra en stoppeklokke i stedet for
  * klokkeslettet ved passering. Returnerer ms eller null.

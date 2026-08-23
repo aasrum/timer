@@ -14,6 +14,7 @@ import {
   formatClock,
   formatClockTenths,
   formatDuration,
+  formatHms,
   formatPace,
   parseDuration,
   parseTimeOfDay,
@@ -247,7 +248,16 @@ export default function Results() {
     );
   }
 
-  function exportEQTiming() {
+  /**
+   * Eksport til EQ Timing.
+   *
+   * EQ legger deltakerens starttid til verdien i «Slutttid» – står det
+   * klokkeslettet der, havner passeringen en halv dag ut i det blå
+   * («13:00:00 + 13:24:29» ble 02:24:29 dagen etter) og hele importen avvises.
+   * Derfor skrives løpstiden. `tidsformat = "clock"` gir den gamle varianten,
+   * for oppsett som venter klokkeslett.
+   */
+  function exportEQTiming(tidsformat: "elapsed" | "clock" = "elapsed") {
     // EQ Timing avviser hele fila om én tid ligger utenfor arrangementets
     // tidsvindu, og sier bare hvilket startnummer det gjelder. Vis dem her,
     // der de kan rettes, framfor å la importen feile.
@@ -307,11 +317,18 @@ export default function Results() {
         continue;
       }
 
+      // Tiden EQ skal lese: løpstid når vi kjenner starten, ellers
+      // klokkeslettet – uten starttid har EQ ingenting å legge den til.
+      const tid = (at: number, elapsedMs: number | undefined) =>
+        tidsformat === "clock" || elapsedMs == null
+          ? formatClock(at)
+          : formatHms(elapsedMs);
+
       // Én rad per mellomtid
       for (const s of r.splits) {
         if (s.passedAt == null) continue;
         lines.push(
-          [...baseRow, s.timingPoint.name, formatClock(s.passedAt), "OK", ""]
+          [...baseRow, s.timingPoint.name, tid(s.passedAt, s.elapsedMs), "OK", ""]
             .map(csvCell).join(";"),
         );
       }
@@ -319,7 +336,7 @@ export default function Results() {
       // Én rad for mål
       if (r.finishAt != null) {
         lines.push(
-          [...baseRow, "Mål", formatClock(r.finishAt), "OK",
+          [...baseRow, "Mål", tid(r.finishAt, r.finishElapsedMs), "OK",
             r.status === "finished" ? String(rank) : ""]
             .map(csvCell).join(";"),
         );
@@ -327,7 +344,7 @@ export default function Results() {
     }
 
     downloadText(
-      `eqtiming-${slug(race!.name)}.csv`,
+      `eqtiming-${slug(race!.name)}${tidsformat === "clock" ? "-klokkeslett" : ""}.csv`,
       lines.join("\r\n"),
     );
   }
@@ -653,8 +670,19 @@ export default function Results() {
         <button className="ghost" onClick={exportCsv}>
           Eksporter CSV
         </button>
-        <button className="ghost" onClick={exportEQTiming}>
+        <button
+          className="ghost"
+          onClick={() => exportEQTiming("elapsed")}
+          title="Slutttid-kolonnen inneholder løpstiden, som EQ Timing legger til starttiden"
+        >
           EQTiming CSV
+        </button>
+        <button
+          className="ghost"
+          onClick={() => exportEQTiming("clock")}
+          title="Samme fil, men med klokkeslett i Slutttid-kolonnen"
+        >
+          EQTiming (klokkeslett)
         </button>
         <button className="ghost" onClick={copyPublicLink}>
           Del resultatlenke
