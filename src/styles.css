@@ -451,8 +451,11 @@ button:disabled {
 /* Startklokke: skal kunne leses på avstand av startpersonell, og skalere
    fra mobil i portrett til iPad i landskap. clamp() i vw gjør at sifrene
    fyller bredden uten å brekke på små skjermer. */
+/* Bevisst hvit uansett tema (ikke var(--surface)): filmet med telefonkamera
+   mot mørk bakgrunn komprimerer gråtoner hardt, og tiendelene blir da
+   uleselige. Hvitt med nesten-svart skrift gir kontrasten kameraet trenger. */
 .clock-hero {
-  background: var(--surface);
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 12px;
@@ -469,12 +472,19 @@ button:disabled {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
   white-space: nowrap;
+  color: #0f172a;
 }
 
 .clock-tenths {
   font-size: 0.42em;
-  color: var(--muted);
-  font-weight: 600;
+  /* Fullkontrast, ikke dempet – tiendelene er ofte det man faktisk skal lese
+     av opptaket, og en dempet gråtone er akkurat det som ble vanskelig å se. */
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.clock-hero .tiny.muted {
+  color: #475569;
 }
 
 .countdown {
