@@ -1,0 +1,111 @@
+import { useEffect, useRef, useState } from "react";
+import { syncRace, type SyncSnapshot } from "./api";
+import { getSetting, setSetting } from "./db";
+import { mergeRaceSnapshot, readLocalSnapshot, type RaceSnapshot } from "./sync";
+import { useAuth } from "./auth";
+
+export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
+
+/**
+ * Synker ett løp mot serveren: sender hele det lokale datasettet og mottar
+ * hele serverens datasett tilbake i samme kall, flettet med de samme
+ * konfliktfrie reglene som manuell fil-fletting (sync.ts).
+ *
+ * Full snapshot hver gang – ingen "siden sist"-markør. Det gjør synken
+ * immun mot klokkeskjevhet mellom enheter: en markør basert på updatedAt
+ * (som er satt av hver enhets egen klokke) kan i verste fall ekskludere en
+ * forsinket/feilstilt enhets data for alltid. Her er hver synk en fullstendig
+ * tilstands-utveksling, så ingenting kan gå tapt uansett hvor lenge en enhet
+ * har vært offline eller hvor feil klokken dens er.
+ */
+export async function syncOnce(raceId: string): Promise<void> {
+  const local = await readLocalSnapshot(raceId);
+  const t0 = Date.now();
+  const remote = await syncRace(raceId, local as unknown as SyncSnapshot);
+  const t1 = Date.now();
+  // Klokkekorreksjon: estimér avvik mellom denne enheten og serveren ved å
+  // anta at serverens tidsstempel ble tatt midt i rundturen. Lagres som
+  // innstilling og legges på registreringstidspunkter, slik at tider fra
+  // enheter med feilstilt klokke blir sammenlignbare.
+  const offset = Math.round(remote.serverTime - (t0 + t1) / 2);
+  // Skriv alltid ved første måling, også når avviket er ~0: at målingen er
+  // gjort er i seg selv informasjon (startklokka skiller «ikke synkronisert»
+  // fra «synkronisert, avvik neglisjerbart»). Deretter bare ved reell endring,
+  // så ikke hver synk gir en skriving.
+  const prev = await getSetting<number | null>("clockOffsetMs", null);
+  if (prev === null || Math.abs(offset - prev) > 250) {
+    await setSetting("clockOffsetMs", offset);
+  }
+  await mergeRaceSnapshot(remote as unknown as RaceSnapshot);
+}
+
+const SYNC_INTERVAL_MS = 15000;
+
+export function useLiveSync(raceId: string | undefined): {
+  status: SyncStatus;
+  lastSyncedAt: number | null;
+} {
+  const { auth } = useAuth();
+  const [status, setStatus] = useState<SyncStatus>("idle");
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const inFlight = useRef(false);
+
+  useEffect(() => {
+    if (!raceId || auth.kind === "none") return;
+
+    let stopped = false;
+
+    async function tick() {
+      if (inFlight.current || stopped) return;
+      if (!navigator.onLine) {
+        setStatus("offline");
+        return;
+      }
+      inFlight.current = true;
+      setStatus("syncing");
+      try {
+        await syncOnce(raceId as string);
+        if (!stopped) {
+          setStatus("ok");
+          setLastSyncedAt(Date.now());
+        }
+      } catch {
+        if (!stopped) setStatus("error");
+      } finally {
+        inFlight.current = false;
+      }
+    }
+
+    tick();
+    const interval = setInterval(tick, SYNC_INTERVAL_MS);
+    const onOnline = () => tick();
+    // Uten denne ville merket vist «Synket» i inntil 15 sekunder etter at
+    // dekningen forsvant. En frivillig som mister nettet skal se det med én
+    // gang, ikke tro at registreringene fortsatt går gjennom.
+    const onOffline = () => {
+      if (!stopped) setStatus("offline");
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisible);
+      // Skyll ut endringer med én gang siden forlates, i stedet for å vente
+      // på neste intervall. Uten dette kan en arrangør sette opp løpet og gå
+      // rett til Stasjoner for å dele ut koder, mens distanser og
+      // mellomtider ennå ikke har nådd serveren – da logger enhetene inn på
+      // et tomt løp. Fire-and-forget: siden er allerede borte.
+      if (navigator.onLine) void syncOnce(raceId).catch(() => {});
+    };
+  }, [raceId, auth.kind]);
+
+  return { status, lastSyncedAt };
+}

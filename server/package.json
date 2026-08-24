@@ -1,0 +1,16 @@
+{
+  "name": "lopstid-server",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Synk-server for Løpstid: admin/stasjons-innlogging og fletting av data mellom enheter",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

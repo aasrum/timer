@@ -1,0 +1,21 @@
+# Servernavnet er bevisst utelatt her: denne Caddy-instansen kjører kun
+# internt bak en eksisterende nginx på hosten (som allerede terminerer TLS
+# for flere andre domener via certbot). Et bart portnummer skrur av Caddys
+# automatiske HTTPS/ACME – nginx eier port 80/443 og sertifikatet.
+:80 {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+
+		# Service worker og manifest skal alltid revalideres.
+		@sw path /sw.js /registerSW.js /manifest.webmanifest
+		header @sw Cache-Control "no-cache"
+	}
+}
